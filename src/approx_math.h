@@ -28,7 +28,7 @@
  * The absolute error is < 4.7*10^-4 over the range 0 < x < infinity.
  *
  * Returns garbage for x < 0.
- * @param x The number to compute erfc for.
+ * @param x The number to compute erfcf for.
  */
 __attribute__((always_inline, const)) INLINE static float approx_erfcf(
     float x) {
@@ -44,6 +44,31 @@ __attribute__((always_inline, const)) INLINE static float approx_erfcf(
   const float arg2 = arg * arg;
   const float arg4 = arg2 * arg2;
   return 1.f / arg4;
+}
+
+/**
+ * @brief Approximate version of the complementay error function erfc(x).
+ *
+ * This is based on eq. 7.1.27 of Abramowitz & Stegun, 1972.
+ * The absolute error is < 4.7*10^-4 over the range 0 < x < infinity.
+ *
+ * Returns garbage for x < 0.
+ * @param x The number to compute erfc for.
+ */
+__attribute__((always_inline, const)) INLINE static double approx_erfc(
+    double x) {
+
+  /* 1 + 0.278393*x + 0.230389*x^2 + 0.000972*x^3 + 0.078108*x^4 */
+  double arg = 0.078108;
+  arg = x * arg + 0.000972;
+  arg = x * arg + 0.230389;
+  arg = x * arg + 0.278393;
+  arg = x * arg + 1.;
+
+  /* 1 / arg^4 */
+  const double arg2 = arg * arg;
+  const double arg4 = arg2 * arg2;
+  return 1. / arg4;
 }
 
 /**

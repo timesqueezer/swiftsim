@@ -46,48 +46,48 @@
 struct grav_tensor {
 
   /* 0th order terms */
-  float F_000;
+  double F_000;
 
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 0
 
   /* 1st order terms */
-  float F_100, F_010, F_001;
+  double F_100, F_010, F_001;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 1
 
   /* 2nd order terms */
-  float F_200, F_020, F_002;
-  float F_110, F_101, F_011;
+  double F_200, F_020, F_002;
+  double F_110, F_101, F_011;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 2
 
   /* 3rd order terms */
-  float F_300, F_030, F_003;
-  float F_210, F_201;
-  float F_120, F_021;
-  float F_102, F_012;
-  float F_111;
+  double F_300, F_030, F_003;
+  double F_210, F_201;
+  double F_120, F_021;
+  double F_102, F_012;
+  double F_111;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 3
 
   /* 4th order terms */
-  float F_400, F_040, F_004;
-  float F_310, F_301;
-  float F_130, F_031;
-  float F_103, F_013;
-  float F_220, F_202, F_022;
-  float F_211, F_121, F_112;
+  double F_400, F_040, F_004;
+  double F_310, F_301;
+  double F_130, F_031;
+  double F_103, F_013;
+  double F_220, F_202, F_022;
+  double F_211, F_121, F_112;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 4
 
   /* 5th order terms */
-  float F_005, F_014, F_023;
-  float F_032, F_041, F_050;
-  float F_104, F_113, F_122;
-  float F_131, F_140, F_203;
-  float F_212, F_221, F_230;
-  float F_302, F_311, F_320;
-  float F_401, F_410, F_500;
+  double F_005, F_014, F_023;
+  double F_032, F_041, F_050;
+  double F_104, F_113, F_122;
+  double F_131, F_140, F_203;
+  double F_212, F_221, F_230;
+  double F_302, F_311, F_320;
+  double F_401, F_410, F_500;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 5
 #error "Missing implementation for order >5"
@@ -1572,8 +1572,8 @@ INLINE static void gravity_M2L_apply(
   /* Record that this tensor has received contributions */
   l_b->interacted = 1;
 
-  const float M_000 = m_a->M_000;
-  const float D_000 = pot->D_000;
+  const double M_000 = m_a->M_000;
+  const double D_000 = pot->D_000;
 
   /*  0th order term */
   l_b->F_000 += M_000 * D_000;
@@ -1583,13 +1583,13 @@ INLINE static void gravity_M2L_apply(
   /* The dipole term is zero when using the CoM */
   /* The compiler will optimize out the terms in the equations */
   /* below. We keep them written to maintain the logical structure. */
-  const float M_100 = 0.f;
-  const float M_010 = 0.f;
-  const float M_001 = 0.f;
+  const double M_100 = 0.f;
+  const double M_010 = 0.f;
+  const double M_001 = 0.f;
 
-  const float D_100 = pot->D_100;
-  const float D_010 = pot->D_010;
-  const float D_001 = pot->D_001;
+  const double D_100 = pot->D_100;
+  const double D_010 = pot->D_010;
+  const double D_001 = pot->D_001;
 
   /*  1st order multipole term (addition to rank 0)*/
   l_b->F_000 += M_100 * D_100 + M_010 * D_010 + M_001 * D_001;
@@ -1601,19 +1601,19 @@ INLINE static void gravity_M2L_apply(
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 1
 
-  const float M_200 = m_a->M_200;
-  const float M_020 = m_a->M_020;
-  const float M_002 = m_a->M_002;
-  const float M_110 = m_a->M_110;
-  const float M_101 = m_a->M_101;
-  const float M_011 = m_a->M_011;
+  const double M_200 = m_a->M_200;
+  const double M_020 = m_a->M_020;
+  const double M_002 = m_a->M_002;
+  const double M_110 = m_a->M_110;
+  const double M_101 = m_a->M_101;
+  const double M_011 = m_a->M_011;
 
-  const float D_200 = pot->D_200;
-  const float D_020 = pot->D_020;
-  const float D_002 = pot->D_002;
-  const float D_110 = pot->D_110;
-  const float D_101 = pot->D_101;
-  const float D_011 = pot->D_011;
+  const double D_200 = pot->D_200;
+  const double D_020 = pot->D_020;
+  const double D_002 = pot->D_002;
+  const double D_110 = pot->D_110;
+  const double D_101 = pot->D_101;
+  const double D_011 = pot->D_011;
 
   /*  2nd order multipole term (addition to rank 0)*/
   l_b->F_000 += M_200 * D_200 + M_020 * D_020 + M_002 * D_002;
@@ -1634,27 +1634,27 @@ INLINE static void gravity_M2L_apply(
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 2
 
-  const float M_300 = m_a->M_300;
-  const float M_030 = m_a->M_030;
-  const float M_003 = m_a->M_003;
-  const float M_210 = m_a->M_210;
-  const float M_201 = m_a->M_201;
-  const float M_021 = m_a->M_021;
-  const float M_120 = m_a->M_120;
-  const float M_012 = m_a->M_012;
-  const float M_102 = m_a->M_102;
-  const float M_111 = m_a->M_111;
+  const double M_300 = m_a->M_300;
+  const double M_030 = m_a->M_030;
+  const double M_003 = m_a->M_003;
+  const double M_210 = m_a->M_210;
+  const double M_201 = m_a->M_201;
+  const double M_021 = m_a->M_021;
+  const double M_120 = m_a->M_120;
+  const double M_012 = m_a->M_012;
+  const double M_102 = m_a->M_102;
+  const double M_111 = m_a->M_111;
 
-  const float D_300 = pot->D_300;
-  const float D_030 = pot->D_030;
-  const float D_003 = pot->D_003;
-  const float D_210 = pot->D_210;
-  const float D_201 = pot->D_201;
-  const float D_021 = pot->D_021;
-  const float D_120 = pot->D_120;
-  const float D_012 = pot->D_012;
-  const float D_102 = pot->D_102;
-  const float D_111 = pot->D_111;
+  const double D_300 = pot->D_300;
+  const double D_030 = pot->D_030;
+  const double D_003 = pot->D_003;
+  const double D_210 = pot->D_210;
+  const double D_201 = pot->D_201;
+  const double D_021 = pot->D_021;
+  const double D_120 = pot->D_120;
+  const double D_012 = pot->D_012;
+  const double D_102 = pot->D_102;
+  const double D_111 = pot->D_111;
 
   /*  3rd order multipole term (addition to rank 0)*/
   l_b->F_000 += M_300 * D_300 + M_030 * D_030 + M_003 * D_003;
@@ -1692,37 +1692,37 @@ INLINE static void gravity_M2L_apply(
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 3
 
-  const float M_400 = m_a->M_400;
-  const float M_040 = m_a->M_040;
-  const float M_004 = m_a->M_004;
-  const float M_310 = m_a->M_310;
-  const float M_301 = m_a->M_301;
-  const float M_031 = m_a->M_031;
-  const float M_130 = m_a->M_130;
-  const float M_013 = m_a->M_013;
-  const float M_103 = m_a->M_103;
-  const float M_220 = m_a->M_220;
-  const float M_202 = m_a->M_202;
-  const float M_022 = m_a->M_022;
-  const float M_211 = m_a->M_211;
-  const float M_121 = m_a->M_121;
-  const float M_112 = m_a->M_112;
+  const double M_400 = m_a->M_400;
+  const double M_040 = m_a->M_040;
+  const double M_004 = m_a->M_004;
+  const double M_310 = m_a->M_310;
+  const double M_301 = m_a->M_301;
+  const double M_031 = m_a->M_031;
+  const double M_130 = m_a->M_130;
+  const double M_013 = m_a->M_013;
+  const double M_103 = m_a->M_103;
+  const double M_220 = m_a->M_220;
+  const double M_202 = m_a->M_202;
+  const double M_022 = m_a->M_022;
+  const double M_211 = m_a->M_211;
+  const double M_121 = m_a->M_121;
+  const double M_112 = m_a->M_112;
 
-  const float D_400 = pot->D_400;
-  const float D_040 = pot->D_040;
-  const float D_004 = pot->D_004;
-  const float D_310 = pot->D_310;
-  const float D_301 = pot->D_301;
-  const float D_031 = pot->D_031;
-  const float D_130 = pot->D_130;
-  const float D_013 = pot->D_013;
-  const float D_103 = pot->D_103;
-  const float D_220 = pot->D_220;
-  const float D_202 = pot->D_202;
-  const float D_022 = pot->D_022;
-  const float D_211 = pot->D_211;
-  const float D_121 = pot->D_121;
-  const float D_112 = pot->D_112;
+  const double D_400 = pot->D_400;
+  const double D_040 = pot->D_040;
+  const double D_004 = pot->D_004;
+  const double D_310 = pot->D_310;
+  const double D_301 = pot->D_301;
+  const double D_031 = pot->D_031;
+  const double D_130 = pot->D_130;
+  const double D_013 = pot->D_013;
+  const double D_103 = pot->D_103;
+  const double D_220 = pot->D_220;
+  const double D_202 = pot->D_202;
+  const double D_022 = pot->D_022;
+  const double D_211 = pot->D_211;
+  const double D_121 = pot->D_121;
+  const double D_112 = pot->D_112;
 
   /* Compute 4th order field tensor terms (addition to rank 0) */
   l_b->F_000 += M_004 * D_004 + M_013 * D_013 + M_022 * D_022 +
@@ -1791,49 +1791,49 @@ INLINE static void gravity_M2L_apply(
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 4
 
-  const float M_500 = m_a->M_500;
-  const float M_050 = m_a->M_050;
-  const float M_005 = m_a->M_005;
-  const float M_410 = m_a->M_410;
-  const float M_401 = m_a->M_401;
-  const float M_041 = m_a->M_041;
-  const float M_140 = m_a->M_140;
-  const float M_014 = m_a->M_014;
-  const float M_104 = m_a->M_104;
-  const float M_320 = m_a->M_320;
-  const float M_302 = m_a->M_302;
-  const float M_230 = m_a->M_230;
-  const float M_032 = m_a->M_032;
-  const float M_203 = m_a->M_203;
-  const float M_023 = m_a->M_023;
-  const float M_122 = m_a->M_122;
-  const float M_212 = m_a->M_212;
-  const float M_221 = m_a->M_221;
-  const float M_311 = m_a->M_311;
-  const float M_131 = m_a->M_131;
-  const float M_113 = m_a->M_113;
+  const double M_500 = m_a->M_500;
+  const double M_050 = m_a->M_050;
+  const double M_005 = m_a->M_005;
+  const double M_410 = m_a->M_410;
+  const double M_401 = m_a->M_401;
+  const double M_041 = m_a->M_041;
+  const double M_140 = m_a->M_140;
+  const double M_014 = m_a->M_014;
+  const double M_104 = m_a->M_104;
+  const double M_320 = m_a->M_320;
+  const double M_302 = m_a->M_302;
+  const double M_230 = m_a->M_230;
+  const double M_032 = m_a->M_032;
+  const double M_203 = m_a->M_203;
+  const double M_023 = m_a->M_023;
+  const double M_122 = m_a->M_122;
+  const double M_212 = m_a->M_212;
+  const double M_221 = m_a->M_221;
+  const double M_311 = m_a->M_311;
+  const double M_131 = m_a->M_131;
+  const double M_113 = m_a->M_113;
 
-  const float D_500 = pot->D_500;
-  const float D_050 = pot->D_050;
-  const float D_005 = pot->D_005;
-  const float D_410 = pot->D_410;
-  const float D_401 = pot->D_401;
-  const float D_041 = pot->D_041;
-  const float D_140 = pot->D_140;
-  const float D_014 = pot->D_014;
-  const float D_104 = pot->D_104;
-  const float D_320 = pot->D_320;
-  const float D_302 = pot->D_302;
-  const float D_230 = pot->D_230;
-  const float D_032 = pot->D_032;
-  const float D_203 = pot->D_203;
-  const float D_023 = pot->D_023;
-  const float D_122 = pot->D_122;
-  const float D_212 = pot->D_212;
-  const float D_221 = pot->D_221;
-  const float D_311 = pot->D_311;
-  const float D_131 = pot->D_131;
-  const float D_113 = pot->D_113;
+  const double D_500 = pot->D_500;
+  const double D_050 = pot->D_050;
+  const double D_005 = pot->D_005;
+  const double D_410 = pot->D_410;
+  const double D_401 = pot->D_401;
+  const double D_041 = pot->D_041;
+  const double D_140 = pot->D_140;
+  const double D_014 = pot->D_014;
+  const double D_104 = pot->D_104;
+  const double D_320 = pot->D_320;
+  const double D_302 = pot->D_302;
+  const double D_230 = pot->D_230;
+  const double D_032 = pot->D_032;
+  const double D_203 = pot->D_203;
+  const double D_023 = pot->D_023;
+  const double D_122 = pot->D_122;
+  const double D_212 = pot->D_212;
+  const double D_221 = pot->D_221;
+  const double D_311 = pot->D_311;
+  const double D_131 = pot->D_131;
+  const double D_113 = pot->D_113;
 
   /* Compute 5th order field tensor terms (addition to rank 0) */
   l_b->F_000 += M_005 * D_005 + M_014 * D_014 + M_023 * D_023 +
@@ -1970,16 +1970,16 @@ INLINE static void gravity_M2L_apply(
 INLINE static void gravity_M2L_nonsym(
     struct grav_tensor *l_b, const struct multipole *m_a, const double pos_b[3],
     const double pos_a[3], const struct gravity_props *props,
-    const int periodic, const double dim[3], const float rs_inv) {
+    const int periodic, const double dim[3], const double rs_inv) {
 
   /* Recover some constants */
-  const float eps = props->epsilon_cur;
-  const float eps_inv = props->epsilon_cur_inv;
+  const double eps = props->epsilon_cur;
+  const double eps_inv = props->epsilon_cur_inv;
 
   /* Compute distance vector */
-  float dx = (float)(pos_b[0] - pos_a[0]);
-  float dy = (float)(pos_b[1] - pos_a[1]);
-  float dz = (float)(pos_b[2] - pos_a[2]);
+  double dx = (double)(pos_b[0] - pos_a[0]);
+  double dy = (double)(pos_b[1] - pos_a[1]);
+  double dz = (double)(pos_b[2] - pos_a[2]);
 
   /* Apply BC */
   if (periodic) {
@@ -1989,8 +1989,8 @@ INLINE static void gravity_M2L_nonsym(
   }
 
   /* Compute distance */
-  const float r2 = dx * dx + dy * dy + dz * dz;
-  const float r_inv = 1. / sqrtf(r2);
+  const double r2 = dx * dx + dy * dy + dz * dz;
+  const double r_inv = 1. / sqrtf(r2);
 
   /* Compute all derivatives */
   struct potential_derivatives_M2L pot;
@@ -2021,16 +2021,16 @@ INLINE static void gravity_M2L_symmetric(
     const struct multipole *restrict m_a, const struct multipole *restrict m_b,
     const double pos_a[3], const double pos_b[3],
     const struct gravity_props *props, const int periodic, const double dim[3],
-    const float rs_inv) {
+    const double rs_inv) {
 
   /* Recover some constants */
-  const float eps = props->epsilon_cur;
-  const float eps_inv = props->epsilon_cur_inv;
+  const double eps = props->epsilon_cur;
+  const double eps_inv = props->epsilon_cur_inv;
 
   /* Compute distance vector */
-  float dx = (float)(pos_b[0] - pos_a[0]);
-  float dy = (float)(pos_b[1] - pos_a[1]);
-  float dz = (float)(pos_b[2] - pos_a[2]);
+  double dx = (double)(pos_b[0] - pos_a[0]);
+  double dy = (double)(pos_b[1] - pos_a[1]);
+  double dz = (double)(pos_b[2] - pos_a[2]);
 
   /* Apply BC */
   if (periodic) {
@@ -2040,8 +2040,8 @@ INLINE static void gravity_M2L_symmetric(
   }
 
   /* Compute distance */
-  const float r2 = dx * dx + dy * dy + dz * dz;
-  const float r_inv = 1. / sqrtf(r2);
+  const double r2 = dx * dx + dy * dy + dz * dz;
+  const double r_inv = 1. / sqrtf(r2);
 
   /* Compute all derivatives */
   struct potential_derivatives_M2L pot;

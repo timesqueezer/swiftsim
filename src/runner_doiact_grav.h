@@ -1141,7 +1141,7 @@ static INLINE void runner_dopair_grav_mm_symmetric(struct runner *r,
   const struct gravity_props *props = e->gravity_properties;
   const int periodic = e->mesh->periodic;
   const double dim[3] = {e->mesh->dim[0], e->mesh->dim[1], e->mesh->dim[2]};
-  const float r_s_inv = e->mesh->r_s_inv;
+  const double r_s_inv = e->mesh->r_s_inv;
 
   TIMER_TIC;
 
@@ -1207,7 +1207,7 @@ static INLINE void runner_dopair_grav_mm_nonsym(
   const struct gravity_props *props = e->gravity_properties;
   const int periodic = e->mesh->periodic;
   const double dim[3] = {e->mesh->dim[0], e->mesh->dim[1], e->mesh->dim[2]};
-  const float r_s_inv = e->mesh->r_s_inv;
+  const double r_s_inv = e->mesh->r_s_inv;
 
   TIMER_TIC;
 
