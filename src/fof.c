@@ -595,14 +595,52 @@ void fof_search_pair_cells_foreign(struct space *s, struct cell *ci, struct cell
 }
 
 /**
- * @brief Mapper function to perform FOF search.
+ * @brief Mapper function to perform FOF search inside each top-level cell.
  *
  * @param map_data An array of #cell%s.
  * @param num_elements Chunk size.
  * @param extra_data Pointer to a #space.
  */
-void fof_search_tree_mapper(void *map_data, int num_elements,
-                            void *extra_data) {
+void fof_search_tree_self_mapper(void *map_data, int num_elements,
+				 void *extra_data) {
+
+  /* Retrieve mapped data. */
+  struct space *s = (struct space *)extra_data;
+  int *local_cells = (int *)map_data;
+
+  const double dim[3] = {s->dim[0], s->dim[1], s->dim[2]};
+  const double search_r2 = s->l_x2;
+
+  /* Loop over cells and find which cells are in range of each other to perform
+   * the FOF search. */
+  for (int ind = 0; ind < num_elements; ind++) {
+
+    /* Get the cell. */
+    struct cell *restrict ci = &s->cells_top[local_cells[ind]];
+
+#ifdef SWIFT_DEBUG_CHECKS
+    /* Only perform FOF search on local cells. */
+    if(ci->nodeID != engine_rank)
+      error("Foreign cell in list of local cells!");
+#endif
+
+    /* Skip empty cells. */
+    if(ci->gcount == 0) continue;
+
+    /* Perform FOF search on local particles within the cell. */
+    rec_fof_search_self(ci, s, dim, search_r2);
+  }
+}
+
+/**
+ * @brief Mapper function to perform FOF search on all pairs of top-level cells.
+ *
+ * @param map_data An array of #cell%s.
+ * @param num_elements Chunk size.
+ * @param extra_data Pointer to a #space.
+ */
+void fof_search_tree_pair_mapper(void *map_data, int num_elements,
+				 void *extra_data) {
 
   /* Retrieve mapped data. */
   struct space *s = (struct space *)extra_data;
@@ -618,34 +656,34 @@ void fof_search_tree_mapper(void *map_data, int num_elements,
   /* Loop over cells and find which cells are in range of each other to perform
    * the FOF search. */
   for (int ind = 0; ind < num_elements; ind++) {
-    
+
     /* Get the cell. */
     struct cell *restrict ci = &s->cells_top[local_cells[ind]];
-    
+
+#ifdef SWIFT_DEBUG_CHECKS
     /* Only perform FOF search on local cells. */
-    if(ci->nodeID == engine_rank) {
+    if(ci->nodeID != engine_rank)
+      error("Foreign cell in list of local cells!");
+#endif
+
+    /* Skip empty cells. */
+    if(ci->gcount == 0) continue;
+
+    /* Loop over all top-level cells skipping over the cells already searched. */
+    for (size_t cjd = offset[ind] + 1; cjd < nr_local_cells; cjd++) {
+
+      struct cell *restrict cj = &s->cells_top[s->local_cells_top[cjd]];
+
+#ifdef SWIFT_DEBUG_CHECKS
+      /* Only perform FOF search on local cells. */
+      if(cj->nodeID != engine_rank)
+	error("Foreign cell in list of local cells!");
+#endif
 
       /* Skip empty cells. */
-      if(ci->gcount == 0) continue;
+      if(cj->gcount == 0) continue;
 
-      /* Perform FOF search on local particles within the cell. */
-      rec_fof_search_self(ci, s, dim, search_r2);
-
-      /* Loop over all top-level cells skipping over the cells already searched.
-      */
-      for (size_t cjd = offset[ind] + 1; cjd < nr_local_cells; cjd++) {
-
-        struct cell *restrict cj = &s->cells_top[s->local_cells_top[cjd]];
-
-        /* Only perform FOF search on local cells. */
-        if(cj->nodeID == engine_rank) {
-          
-          /* Skip empty cells. */
-          if(cj->gcount == 0) continue;
-
-          rec_fof_search_pair(ci, cj, s, dim, search_r2);
-        }
-      }
+      rec_fof_search_pair(ci, cj, s, dim, search_r2);
     }
   }
 }
@@ -1244,8 +1282,12 @@ void fof_search_tree(struct space *s) {
 
   ticks tic = getticks();
 
-  /* Perform local FOF using the threadpool. */
-  threadpool_map(&s->e->threadpool, fof_search_tree_mapper, s->local_cells_top,
+  /* Perform local FOF using the threadpool on all the top-level cells. */
+  threadpool_map(&s->e->threadpool, fof_search_tree_self_mapper, s->local_cells_top,
+                 s->nr_local_cells, sizeof(int), 1, s);
+
+  /* And on all the pairs of top-level cells */
+  threadpool_map(&s->e->threadpool, fof_search_tree_pair_mapper, s->local_cells_top,
                  s->nr_local_cells, sizeof(int), 1, s);
 
   message("Local FOF took: %.3f %s.",
@@ -1489,13 +1531,11 @@ void fof_search_tree(struct space *s) {
     for (size_t i = 0; i < nr_gparts; i++) {
       size_t root = node_offset + i;
       size_t local_root = node_offset + i;
-      //int foreign = 0;
 
       /* FOF find */
       while (root != group_index[root - node_offset]) {
         root = group_index[root - node_offset];
         if (!is_local(root, nr_gparts)) {
-          //foreign = 1;
           break;
         }
 
