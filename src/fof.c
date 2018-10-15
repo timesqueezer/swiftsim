@@ -1320,7 +1320,7 @@ void fof_search_tree(struct space *s) {
   }
 
   size_t *local_roots = NULL;
-  int local_group_count = 0;
+  size_t local_group_count = 0;
 
   if (posix_memalign((void **)&local_roots, 32, num_local_roots * sizeof(size_t)) != 0)
     error("Failed to allocate list of local roots.");
@@ -1489,13 +1489,13 @@ void fof_search_tree(struct space *s) {
     for (size_t i = 0; i < nr_gparts; i++) {
       size_t root = node_offset + i;
       size_t local_root = node_offset + i;
-      int foreign = 0;
+      //int foreign = 0;
 
       /* FOF find */
       while (root != group_index[root - node_offset]) {
         root = group_index[root - node_offset];
         if (!is_local(root, nr_gparts)) {
-          foreign = 1;
+          //foreign = 1;
           break;
         }
 
