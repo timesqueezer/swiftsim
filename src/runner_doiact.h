@@ -53,7 +53,7 @@
 #define _DOPAIR1_NAIVE(f) PASTE(runner_dopair1_naive, f)
 #define DOPAIR1_NAIVE _DOPAIR1_NAIVE(FUNCTION)
 
-#define _DOPAIR2_NAIVE(f) PASTE(runner_dopair2_naive, f)
+#define _DOPAIR2_NAIVE(f) PASTE(runner_dopair2_naive, f)   /* this does the "force" part of the caculation */
 #define DOPAIR2_NAIVE _DOPAIR2_NAIVE(FUNCTION)
 
 #define _DOSELF1_NAIVE(f) PASTE(runner_doself1_naive, f)

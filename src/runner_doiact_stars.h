@@ -78,6 +78,10 @@ void runner_doself_stars_density(struct runner *r, struct cell *c, int timer) {
 
       if (r2 > 0.f && r2 < hig2) {
         runner_iact_nonsym_stars_density(r2, dx, hi, hj, si, pj, a, H);
+
+      /* RGB : change this to be nonsym_stars_feedback ... in a genertic way ... Loic to do this */
+
+	
       }
     } /* loop over the parts in ci. */
   }   /* loop over the sparts in ci. */
@@ -152,6 +156,8 @@ void runner_dosubpair_stars_density(struct runner *r, struct cell *restrict ci,
 
       if (r2 < hig2)
         runner_iact_nonsym_stars_density(r2, dx, hi, hj, si, pj, a, H);
+
+      /* RGB : change this to be nonsym_stars_feedback ... in a genertic way ... Loic to do this */
 
     } /* loop over the parts in cj. */
   }   /* loop over the parts in ci. */
