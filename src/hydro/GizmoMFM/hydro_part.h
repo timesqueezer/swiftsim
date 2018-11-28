@@ -69,6 +69,9 @@ struct part {
   /* Pressure. */
   float P;
 
+  /* Entropic function. */
+  float A;
+
   union {
     /* Quantities used during the volume (=density) loop. */
     struct {
@@ -160,6 +163,9 @@ struct part {
 
     /* Fluid thermal energy (not per unit mass!). */
     float energy;
+
+    /* Fluid entropy. */
+    float entropy;
 
   } conserved;
 
