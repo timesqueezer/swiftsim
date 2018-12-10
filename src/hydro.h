@@ -27,6 +27,7 @@
 #include "hydro_properties.h"
 #include "kernel_hydro.h"
 #include "part.h"
+#include "viscosity.h"
 
 /* Import the right functions */
 #if defined(MINIMAL_SPH)
