@@ -32,7 +32,7 @@
  */
 
 /* Viscosity information for given particle */
-struct viscosity {
+struct viscosity_part {
 
   /* TODO: Union this */
 
@@ -45,5 +45,13 @@ struct viscosity {
   } force;
 
 } SWIFT_STRUCT_ALIGN;
+
+/* Viscosity information for hydro_properties */
+struct viscosity_properties {
+
+  /* Viscosity coefficient (constant) */
+  float alpha;
+
+};
 
 #endif /* SWIFT_CONSTANT_VISCOSITY_PART_H */
