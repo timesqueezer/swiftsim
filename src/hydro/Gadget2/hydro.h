@@ -468,6 +468,9 @@ __attribute__((always_inline)) INLINE static void hydro_part_has_no_neighbours(
  * sub-structure and written to the force sub-structure.
  * Examples of calculations done here include the calculation of viscosity term
  * constants, thermal conduction terms, hydro conversions, etc.
+ * 
+ * Remember to call viscosity_prepare_force at the end before you reset the
+ * unions for your particles.
  *
  * @param p The particle to act upon
  * @param xp The extended particle data to act upon
@@ -517,6 +520,8 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
   /* Compute the "grad h" term */
   const float omega_inv =
       1.f / (1.f + hydro_dimension_inv * p->h * p->density.rho_dh * rho_inv);
+
+  /* viscosity_end_force(p, xp, cosmo, hydro_props, dt_alpha); */
 
   /* Update variables. */
   p->force.f = omega_inv;
