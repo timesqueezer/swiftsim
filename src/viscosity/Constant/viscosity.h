@@ -90,6 +90,48 @@ void viscosity_part_has_no_neighbours(
     struct part *restrict p, struct xpart *restrict xp,
     const struct cosmology *cosmo) {}
 
+
+
+
+/**
+ * @brief Prepare a particle for the gradient calculation.
+ *
+ * This function is called after the density loop and before the gradient loop.
+ *
+ * This should be called inside hydro_prepare_gradient, otherwise it will not
+ * be used. This is to preserve unions.
+ * 
+ * @param p The particle to act upon.
+ * @param xp The extended particle data to act upon.
+ * @param cosmo The cosmological model.
+ */
+void viscosity_prepare_gradient(
+    struct part* restrict p, struct xpart* restrict xp,
+    const struct cosmology* cosmo) {}
+
+/**
+ * @brief Resets the variables that are required for a gradient calculation.
+ *
+ * This function is called after viscosity_prepare_gradient.
+ *
+ * @param p The particle to act upon.
+ * @param xp The extended particle data to act upon.
+ * @param cosmo The cosmological model.
+ */
+void viscosity_reset_gradient(
+    struct part* restrict p) {}
+
+
+/**
+ * @brief Finishes the gradient calculation.
+ *
+ * @param p The particle to act upon.
+ */
+__attribute__((always_inline)) INLINE static void viscosity_end_gradient(
+    struct part* p) {}
+
+
+
 /**
  * @brief Prepare a particle for the force calculation.
  *

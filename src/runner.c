@@ -1166,6 +1166,7 @@ void runner_do_extra_ghost(struct runner *r, struct cell *c, int timer) {
 
         /* Finish the gradient calculation */
         hydro_end_gradient(p);
+        viscosity_end_gradient(p);
 
         /* As of here, particle force variables will be set. */
 
@@ -1313,6 +1314,7 @@ void runner_do_ghost(struct runner *r, struct cell *c, int timer) {
 
             /* Prepare the particle for the gradient loop over neighbours */
             hydro_reset_gradient(p);
+            viscosity_reset_gradient(p);
 
 #else
             const struct hydro_props *hydro_props = e->hydro_properties;
@@ -1416,6 +1418,7 @@ void runner_do_ghost(struct runner *r, struct cell *c, int timer) {
 
         /* Prepare the particle for the gradient loop over neighbours */
         hydro_reset_gradient(p);
+        viscosity_reset_gradient(p);
 
 #else
         const struct hydro_props *hydro_props = e->hydro_properties;
