@@ -3478,6 +3478,7 @@ void cell_drift_part(struct cell *c, const struct engine *e, int force) {
             p->time_bin = time_bin_inhibited;
             p->gpart->time_bin = time_bin_inhibited;
             hydro_part_has_no_neighbours(p, xp, e->cosmology);
+            viscosity_part_has_no_neighbours(p, xp, e->cosmology);
             p->mass = 0.f;
             p->gpart->mass = 0.f;
             break;
@@ -3505,6 +3506,7 @@ void cell_drift_part(struct cell *c, const struct engine *e, int force) {
       /* Get ready for a density calculation */
       if (part_is_active(p, e)) {
         hydro_init_part(p, &e->s->hs);
+        viscosity_init_part(p, &e->s->hs);
         chemistry_init_part(p, e->chemistry);
       }
     }

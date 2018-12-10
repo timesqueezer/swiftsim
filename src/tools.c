@@ -152,6 +152,7 @@ void pairs_single_density(double *dim, long long int pid,
   printf("pairs_single: part[%i].id == %lli.\n", k, pid);
 
   hydro_init_part(&p, NULL);
+  viscosity_init_part(&p, NULL);
 
   /* Loop over all particle pairs. */
   for (k = 0; k < N; k++) {
@@ -559,6 +560,7 @@ void engine_single_density(double *dim, long long int pid,
 
   /* Clear accumulators. */
   hydro_init_part(&p, NULL);
+  viscosity_init_part(&p, NULL);
 
   /* Loop over all particle pairs (force). */
   for (k = 0; k < N; k++) {
@@ -581,6 +583,8 @@ void engine_single_density(double *dim, long long int pid,
 
   /* Dump the result. */
   hydro_end_density(&p, cosmo);
+  viscosity_end_density(&p, cosmo);
+
   message("part %lli (h=%e) has wcount=%e, rho=%e.", p.id, p.h,
           p.density.wcount, hydro_get_comoving_density(&p));
   fflush(stdout);

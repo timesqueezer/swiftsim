@@ -1282,6 +1282,7 @@ void runner_do_ghost(struct runner *r, struct cell *c, int timer) {
 
           /* Finish the density calculation */
           hydro_end_density(p, cosmo);
+          viscosity_end_density(p, cosmo);
           chemistry_end_density(p, chemistry, cosmo);
 
           /* Compute one step of the Newton-Raphson scheme */
@@ -1380,6 +1381,7 @@ void runner_do_ghost(struct runner *r, struct cell *c, int timer) {
 
             /* Re-initialise everything */
             hydro_init_part(p, hs);
+            viscosity_init_part(p, hs);
             chemistry_init_part(p, chemistry);
 
             /* Off we go ! */
@@ -1394,6 +1396,7 @@ void runner_do_ghost(struct runner *r, struct cell *c, int timer) {
             if (has_no_neighbours) {
               hydro_part_has_no_neighbours(p, xp, cosmo);
               chemistry_part_has_no_neighbours(p, xp, chemistry, cosmo);
+              viscosity_part_has_no_neighbours(p, xp, cosmo);
             }
           }
         }
@@ -2358,6 +2361,7 @@ void runner_do_end_force(struct runner *r, struct cell *c, int timer) {
 
         /* Finish the force loop */
         hydro_end_force(p, cosmo);
+        viscosity_end_force(p, cosmo);
       }
     }
 

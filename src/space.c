@@ -2794,6 +2794,7 @@ void space_first_init_parts_mapper(void *restrict map_data, int count,
   for (int k = 0; k < count; k++) {
 
     hydro_first_init_part(&p[k], &xp[k]);
+    viscosity_first_init_part(&p[k], &xp[k]);
 #ifdef WITH_LOGGER
     logger_part_data_init(&xp[k].logger_data);
 #endif
@@ -2963,7 +2964,10 @@ void space_init_parts_mapper(void *restrict map_data, int count,
 
   struct part *restrict parts = (struct part *)map_data;
   const struct hydro_space *restrict hs = (struct hydro_space *)extra_data;
-  for (int k = 0; k < count; k++) hydro_init_part(&parts[k], hs);
+  for (int k = 0; k < count; k++) {
+    hydro_init_part(&parts[k], hs);
+    viscosity_init_part(&parts[k], hs);
+  }
 }
 
 /**
