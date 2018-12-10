@@ -215,6 +215,7 @@ void reset_particles(struct cell *c, struct hydro_space *hs,
     set_energy_state(p, press, size, density);
 
     hydro_init_part(p, hs);
+    viscosity_init_part(p, hs);
 
 #if defined(GIZMO_MFV_SPH) || defined(SHADOWFAX_SPH)
     float volume = p->conserved.mass / density;
@@ -659,6 +660,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 125; ++i) {
       for (int pid = 0; pid < cells[i]->hydro.count; ++pid)
         hydro_init_part(&cells[i]->hydro.parts[pid], &space.hs);
+        viscosity_init_part(&cells[i]->hydro.parts[pid], &space.hs);
     }
 
     /* First, sort stuff */
@@ -764,6 +766,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 125; ++i) {
       for (int pid = 0; pid < cells[i]->hydro.count; ++pid)
         hydro_init_part(&cells[i]->hydro.parts[pid], &space.hs);
+        viscosity_init_part(&cells[i]->hydro.parts[pid], &space.hs);
     }
   }
 

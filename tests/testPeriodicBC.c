@@ -198,6 +198,7 @@ void clean_up(struct cell *ci) {
 void zero_particle_fields(struct cell *c) {
   for (int pid = 0; pid < c->hydro.count; pid++) {
     hydro_init_part(&c->hydro.parts[pid], NULL);
+    viscosity_init_part(&c->hydro.parts[pid], NULL);
   }
 }
 
@@ -207,6 +208,7 @@ void zero_particle_fields(struct cell *c) {
 void end_calculation(struct cell *c, const struct cosmology *cosmo) {
   for (int pid = 0; pid < c->hydro.count; pid++) {
     hydro_end_density(&c->hydro.parts[pid], cosmo);
+    viscosity_end_density(&c->hydro.parts[pid], cosmo);
   }
 }
 

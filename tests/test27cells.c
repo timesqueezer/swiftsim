@@ -231,6 +231,7 @@ void zero_particle_fields(struct cell *c) {
 #endif
   for (int pid = 0; pid < c->hydro.count; pid++) {
     hydro_init_part(&c->hydro.parts[pid], hspointer);
+    viscosity_init_part(&c->hydro.parts[pid], hspointer);
   }
 }
 
@@ -240,6 +241,7 @@ void zero_particle_fields(struct cell *c) {
 void end_calculation(struct cell *c, const struct cosmology *cosmo) {
   for (int pid = 0; pid < c->hydro.count; pid++) {
     hydro_end_density(&c->hydro.parts[pid], cosmo);
+    viscosity_end_density(&c->hydro.parts[pid, cosmo])
 
     /* Recover the common "Neighbour number" definition */
     c->hydro.parts[pid].density.wcount *= pow_dimension(c->hydro.parts[pid].h);
