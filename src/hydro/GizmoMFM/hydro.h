@@ -520,9 +520,9 @@ __attribute__((always_inline)) INLINE static void hydro_convert_quantities(
   p->conserved.energy /= cosmo->a_factor_internal_energy;
 
   /* initialize the entropy */
-  p->conserved.entropy =
-    p->conserved.energy * pow_minus_gamma_minus_one(p->rho) *
-      hydro_gamma_minus_one;
+  p->conserved.entropy = p->conserved.energy *
+                         pow_minus_gamma_minus_one(p->rho) *
+                         hydro_gamma_minus_one;
 }
 
 /**
@@ -639,7 +639,8 @@ __attribute__((always_inline)) INLINE static void hydro_kick_extra(
       p->conserved.mass * gas_internal_energy_from_entropy(0.0f, 0.0f);
 #else
   p->conserved.energy += p->flux.energy * dt_therm;
-  p->conserved.energy = hydro_one_over_gamma_minus_one * p->conserved.entropy * pow_gamma_minus_one(p->rho);
+  p->conserved.energy = hydro_one_over_gamma_minus_one * p->conserved.entropy *
+                        pow_gamma_minus_one(p->rho);
 #endif
 
 #ifndef HYDRO_GAMMA_5_3
@@ -965,10 +966,9 @@ __attribute__((always_inline)) INLINE static void hydro_set_internal_energy(
   p->conserved.energy = u * p->conserved.mass;
 #ifdef GIZMO_TOTAL_ENERGY
   /* add the kinetic energy */
-  p->conserved.energy +=
-      0.5f *
-      (p->conserved.momentum[0] * p->v[0] + p->conserved.momentum[1] * p->v[1] +
-       p->conserved.momentum[2] * p->v[2]);
+  p->conserved.energy += 0.5f * (p->conserved.momentum[0] * p->v[0] +
+                                 p->conserved.momentum[1] * p->v[1] +
+                                 p->conserved.momentum[2] * p->v[2]);
 #endif
   p->P = hydro_gamma_minus_one * p->rho * u;
 }
@@ -989,10 +989,9 @@ __attribute__((always_inline)) INLINE static void hydro_set_entropy(
                         hydro_one_over_gamma_minus_one * p->conserved.mass;
 #ifdef GIZMO_TOTAL_ENERGY
   /* add the kinetic energy */
-  p->conserved.energy +=
-      0.5f *
-      (p->conserved.momentum[0] * p->v[0] + p->conserved.momentum[1] * p->v[1] +
-       p->conserved.momentum[2] * p->v[2]);
+  p->conserved.energy += 0.5f * (p->conserved.momentum[0] * p->v[0] +
+                                 p->conserved.momentum[1] * p->v[1] +
+                                 p->conserved.momentum[2] * p->v[2]);
 #endif
   p->P = S * pow_gamma(p->rho);
 }
@@ -1014,10 +1013,9 @@ hydro_set_init_internal_energy(struct part* p, float u_init) {
   p->conserved.energy = u_init * p->conserved.mass;
 #ifdef GIZMO_TOTAL_ENERGY
   /* add the kinetic energy */
-  p->conserved.energy +=
-      0.5f *
-      (p->conserved.momentum[0] * p->v[0] + p->conserved.momentum[1] * p->v[1] +
-       p->conserved.momentum[2] * p->v[2]);
+  p->conserved.energy += 0.5f * (p->conserved.momentum[0] * p->v[0] +
+                                 p->conserved.momentum[1] * p->v[1] +
+                                 p->conserved.momentum[2] * p->v[2]);
 #endif
   p->P = hydro_gamma_minus_one * p->rho * u_init;
 }
