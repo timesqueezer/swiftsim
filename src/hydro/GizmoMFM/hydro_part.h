@@ -120,10 +120,8 @@ struct part {
 
         /* Maximum signal velocity among all the neighbours of the particle. The
          * signal velocity encodes information about the relative fluid
-         * velocities
-         * AND particle velocities of the neighbour and this particle, as well
-         * as
-         * the sound speed of both particles. */
+         * velocities AND particle velocities of the neighbour and this
+         * particle, as well as the sound speed of both particles. */
         float vmax;
 
       } timestepvars;
@@ -133,6 +131,10 @@ struct part {
 
         /* Needed to drift the primitive variables. */
         float h_dt;
+
+        /* Maximum kinetic energy of all neighbouring particles (in the rest
+         * frame of this particle). Used for the entropy switch. */
+        float Ekinmax;
 
       } force;
     };
