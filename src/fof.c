@@ -1267,10 +1267,16 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
     comm_offset[i] = offset[i];
   }
 
-  // TO DO: check this
-  const int number_steps = log2(e->nr_nodes + 0.1) - 1;
+  /* log_2(x) = (number of bits in the type) - (number of leading 0-bits in x) */
+  int number_steps = 8 * sizeof(e->nr_nodes) - intrinsics_clz(e->nr_nodes); 
 
-  for (int step = 0; step <= number_steps; ++step) {
+  if(intrinsics_popcount(e->nr_nodes) == 1)
+    number_steps--;
+  
+  if(engine_rank == 0)
+    message("We will need %d steps to complete magic.", number_steps);
+  
+  for (int step = 0; step < number_steps; ++step) {
 
     if (engine_rank % (1 << step) == 0) {
 
@@ -1286,7 +1292,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
         my_search_end = offset[engine_rank + 1];
       } else {
 
-        my_work_start = offset[engine_rank + (1 << (step))];
+        my_work_start = offset[min(engine_rank + (1 << (step)), e->nr_nodes)];
         my_work_end = offset[min(engine_rank + (1 << (step + 1)), e->nr_nodes)];
 
         my_search_start = offset[engine_rank];
@@ -1309,18 +1315,19 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
         /* Check whether the group already exists */
         for (size_t i = my_search_start; i < my_search_end; ++i) {
           if (global_group_id[i] == global_group_id[k]) {
-            find_i = i;
+            find_i = global_group_links[i].group_offset_i;
             break;
           }
         }
 
-        for (size_t j = my_work_start; j < my_work_end; j++) {
-          if (global_group_id[j] == global_group_id[k + 1]) {
-            find_j = j;
-            break;
-          }
-        }
-
+        /* for (size_t j = my_work_start; j < my_work_end; j++) { */
+        /*   if (global_group_id[j] == global_group_id[k + 1]) { */
+        /*     find_j =  */
+        /*     break; */
+        /*   } */
+        /* } */
+	find_j = k + 1;
+	
         /* if(find_i == -1 && find_j == -1) */
         /*   error("We f***ed up! find_i=%d find_j=%d pair=(%zd %zd)", find_i,
          * find_j, */
