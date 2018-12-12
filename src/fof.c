@@ -934,7 +934,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 #ifdef WITH_MPI
 
   struct engine *e = s->e;
-  //const size_t min_group_size = s->fof_data.min_group_size;
+  const size_t min_group_size = s->fof_data.min_group_size;
   size_t *group_index = s->fof_data.group_index;
   size_t *group_size = s->fof_data.group_size;
   double *group_mass = s->fof_data.group_mass;
@@ -1159,7 +1159,6 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
         "Error while allocating memory for the displacement in memory for the "
         "global group link list");
 
-  
   /* Gather the total number of links on each rank. */
   MPI_Allgather(&group_link_count, 1, MPI_INT, group_link_counts, 1, MPI_INT,
                 MPI_COMM_WORLD);
@@ -1170,9 +1169,8 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   for (int i = 1; i <= e->nr_nodes; i++)
     offset[i] = offset[i - 1] + group_link_counts[i - 1];
 
-  if(offset[e->nr_nodes] != global_group_link_count)
-    error("Incorrect offset");
-  
+  if (offset[e->nr_nodes] != global_group_link_count) error("Incorrect offset");
+
   /* Gather the global link list on all ranks. */
   MPI_Allgatherv(group_links, group_link_count, fof_mpi_type,
                  global_group_links, group_link_counts, offset, fof_mpi_type,
@@ -1239,11 +1237,25 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   for (int i = 0; i < global_group_link_count; i++) {
     size_t group_i = global_group_links[i].group_i;
     size_t group_j = global_group_links[i].group_j;
-  
-    global_group_id[2*i] = group_i;
-    global_group_id[2*i + 1] = group_j;
+
+    const int group_offset = 2 * i;
+
+    global_group_id[group_offset] = group_i;
+    global_group_id[group_offset + 1] = group_j;
+
+    global_group_size[group_offset] += global_group_links[i].group_i_size;
+    global_group_mass[group_offset] += global_group_links[i].group_i_mass;
+    global_group_CoM[group_offset].x += global_group_links[i].group_i_CoM.x;
+    global_group_CoM[group_offset].y += global_group_links[i].group_i_CoM.y;
+    global_group_CoM[group_offset].z += global_group_links[i].group_i_CoM.z;
+
+    global_group_size[group_offset + 1] += global_group_links[i].group_j_size;
+    global_group_mass[group_offset + 1] += global_group_links[i].group_j_mass;
+    global_group_CoM[group_offset + 1].x += global_group_links[i].group_j_CoM.x;
+    global_group_CoM[group_offset + 1].y += global_group_links[i].group_j_CoM.y;
+    global_group_CoM[group_offset + 1].z += global_group_links[i].group_j_CoM.z;
   }
-  
+
   /* Recompute the counts and offsets of the flattened array */
   for (int i = 0; i < e->nr_nodes; ++i) {
     group_link_counts[i] *= 2;
@@ -1254,138 +1266,213 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   for (int i = 0; i < e->nr_nodes; ++i) {
     comm_offset[i] = offset[i];
   }
-  
+
   // TO DO: check this
   const int number_steps = log2(e->nr_nodes + 0.1) - 1;
 
-  for(int step = 0; step <= number_steps; ++step) {
+  for (int step = 0; step <= number_steps; ++step) {
 
-    if( engine_rank % (1 << step) == 0) {
+    if (engine_rank % (1 << step) == 0) {
 
-      size_t my_work_start;
-      size_t my_work_end;
-      
-      size_t my_search_start;
-      size_t my_search_end;      
-      
-      if ( step == 0) {
-      
-       my_work_start = offset[engine_rank];
-       my_work_end =  offset[engine_rank + 1];
+      size_t my_work_start, my_work_end;
+      size_t my_search_start, my_search_end;
 
-       my_search_start = offset[engine_rank];
-       my_search_end = offset[engine_rank + 1];
-      }
-      else {
+      if (step == 0) {
 
-	my_work_start = offset[engine_rank  + (1 << (step))];
-	my_work_end = offset[min(engine_rank + (1 << (step + 1)), e->nr_nodes)];
+        my_work_start = offset[engine_rank];
+        my_work_end = offset[engine_rank + 1];
 
-	my_search_start = offset[engine_rank];
-	my_search_end = my_work_start;
+        my_search_start = offset[engine_rank];
+        my_search_end = offset[engine_rank + 1];
+      } else {
+
+        my_work_start = offset[engine_rank + (1 << (step))];
+        my_work_end = offset[min(engine_rank + (1 << (step + 1)), e->nr_nodes)];
+
+        my_search_start = offset[engine_rank];
+        my_search_end = my_work_start;
       }
 
-      message("step=%d work_start=%zd work_end=%zd search_start=%zd search_end=%zd size=%d link_count=%d",
-	      step, my_work_start, my_work_end, my_search_start, my_search_end, global_group_list_size, global_group_link_count);
+      message(
+          "step=%d work_start=%zd work_end=%zd search_start=%zd search_end=%zd "
+          "size=%d link_count=%d",
+          step, my_work_start, my_work_end, my_search_start, my_search_end,
+          global_group_list_size, global_group_link_count);
 
       /* Loop over the section of the global array where we work */
       for (size_t k = my_work_start; k < my_work_end; k += 2) {
 
-	int find_i = -1, find_j = -1;
+        int find_i = -1, find_j = -1;
 
-	// TO DO: Do we really need a symmetric search here?
-	
-	/* Check whether the group already exists */
-	for(size_t i = my_search_start; i< my_search_end; ++i) {
-	  if (global_group_id[i] == global_group_id[k]) {
-	    find_i = i;
-	    break;
-	  }
-	}
-	
-	for (size_t j = my_work_start; j < my_work_end; j++) {
-	  if (global_group_id[j] == global_group_id[k + 1]) {
-	    find_j = j;
-	    break;
-	  }
-	}
+        // TO DO: Do we really need a symmetric search here?
 
-	/* if(find_i == -1 && find_j == -1) */
-	/*   error("We f***ed up! find_i=%d find_j=%d pair=(%zd %zd)", find_i, find_j, */
-	/* 	global_group_id[k], global_group_id[k+1]); */
+        /* Check whether the group already exists */
+        for (size_t i = my_search_start; i < my_search_end; ++i) {
+          if (global_group_id[i] == global_group_id[k]) {
+            find_i = i;
+            break;
+          }
+        }
 
+        for (size_t j = my_work_start; j < my_work_end; j++) {
+          if (global_group_id[j] == global_group_id[k + 1]) {
+            find_j = j;
+            break;
+          }
+        }
 
-	if(find_i == -1 && find_j != -1)
-	  continue;
+        /* if(find_i == -1 && find_j == -1) */
+        /*   error("We f***ed up! find_i=%d find_j=%d pair=(%zd %zd)", find_i,
+         * find_j, */
+        /* 	global_group_id[k], global_group_id[k+1]); */
 
-	if(find_i == -1 || find_j == -1)
-	  error("We f***ed up! find_i=%d find_j=%d pair=(%zd %zd)", find_i, find_j,
-		global_group_id[k], global_group_id[k+1]);
-	  
-	
-	/* Use the offset to find the group's root. */
-	size_t root_i = fof_find(find_i, global_group_index);
-	size_t root_j = fof_find(find_j, global_group_index);
-	
-	size_t group_i = global_group_id[root_i];
-	size_t group_j = global_group_id[root_j];
+        if (find_i == -1 && find_j != -1) continue;
 
-	if (group_i == group_j) continue;
+        if (find_i == -1 || find_j == -1)
+          error("We f***ed up! find_i=%d find_j=%d pair=(%zd %zd)", find_i,
+                find_j, global_group_id[k], global_group_id[k + 1]);
 
-	/* Update roots accordingly. */
-	if (group_j < group_i) {
-	  global_group_index[root_i] = root_j;
-	} else {
-	  global_group_index[root_j] = root_i;
-	}
+        /* Use the offset to find the group's root. */
+        size_t root_i = fof_find(find_i, global_group_index);
+        size_t root_j = fof_find(find_j, global_group_index);
+
+        size_t group_i = global_group_id[root_i];
+        size_t group_j = global_group_id[root_j];
+
+        if (group_i == group_j) continue;
+
+        /* Update roots accordingly. */
+        if (group_j < group_i) {
+          global_group_index[root_i] = root_j;
+        } else {
+          global_group_index[root_j] = root_i;
+        }
       }
-    }      
+    }
 
     /* Now we need to broadcast what we have done to everyone */
 
     // TO DO: Better MPI type for size_t !!
     MPI_Allgatherv(MPI_IN_PLACE, /*send_count=*/0, MPI_DATATYPE_NULL,
-		   global_group_index, group_link_counts, comm_offset, MPI_LONG_LONG,
-		   MPI_COMM_WORLD);
+                   global_group_index, group_link_counts, comm_offset,
+                   MPI_LONG_LONG, MPI_COMM_WORLD);
 
     /* Update the counts and offsets for the next round */
-    if(step != number_steps) {
-    
+    if (step != number_steps) {
+
       for (int i = 0; i < e->nr_nodes; ++i) {
-	
-	/* New value of the counts for this rank */
-	if(i % (1 << (step + 1)) == 0) {
-	  int count = 0;
-	  for (int j = i ; j < i + (1 << (step + 1)); ++j)
-	    count += group_link_counts[j];
-	  group_link_counts[i] = count;
-	}
-	else {
-	  group_link_counts[i] = 0;
-	}
-	
-	/* Update the offsets as well */
-	if ( i > 0 ) {
-	  comm_offset[i] = comm_offset[i - 1] + group_link_counts[i - 1];
-	}
+
+        /* New value of the counts for this rank */
+        if (i % (1 << (step + 1)) == 0) {
+          int count = 0;
+          for (int j = i; j < i + (1 << (step + 1)); ++j)
+            count += group_link_counts[j];
+          group_link_counts[i] = count;
+        } else {
+          group_link_counts[i] = 0;
+        }
+
+        /* Update the offsets as well */
+        if (i > 0) {
+          comm_offset[i] = comm_offset[i - 1] + group_link_counts[i - 1];
+        }
       }
-      
+
       //#ifdef SWIFT_DEBUG_CHECKS
-	int count_check = 0;
-	for(int i = 0; i < e->nr_nodes; ++i) {
-	  count_check += group_link_counts[i];
-	}
-	if ( count_check != global_group_list_size) {
-	  error("Something went wrong creating the new list of counts");
-	  //#endif
-	} 
+      int count_check = 0;
+      for (int i = 0; i < e->nr_nodes; ++i) {
+        count_check += group_link_counts[i];
+      }
+      if (count_check != global_group_list_size) {
+        error("Something went wrong creating the new list of counts");
+      }
+      //#endif
     }
 
     message("");
     fflush(stdout);
     MPI_Barrier(MPI_COMM_WORLD);
   }
-  
+
+  if (posix_memalign((void **)local_roots, SWIFT_STRUCT_ALIGNMENT,
+                     global_group_list_size * sizeof(size_t)) != 0)
+    error("Error while allocating memory for local roots");
+
+  /* Store the original group size before incrementing in the Union-Find. */
+  size_t *orig_global_group_size = NULL;
+
+  if (posix_memalign((void **)&orig_global_group_size, SWIFT_STRUCT_ALIGNMENT,
+                     global_group_list_size * sizeof(size_t)) != 0)
+    error(
+        "Error while allocating memory for the displacement in memory for the "
+        "global group link list");
+
+  for (int i = 0; i < global_group_list_size; i++)
+    orig_global_group_size[i] = global_group_size[i];
+
+  /* Update each group locally with new root information. */
+  for (int i = 0; i < global_group_list_size; i++) {
+
+    size_t group_id = global_group_id[i];
+    size_t group_id_index = fof_find(global_group_index[i], global_group_index);
+    size_t new_root = global_group_id[group_id_index];
+
+    /* If the group is local update its root and size. */
+    if (is_local(group_id, nr_gparts) && new_root != group_id) {
+      group_index[group_id - node_offset] = new_root;
+
+      group_mass[group_id - node_offset] -= global_group_mass[i];
+      group_CoM[group_id - node_offset].x -= global_group_CoM[i].x;
+      group_CoM[group_id - node_offset].y -= global_group_CoM[i].y;
+      group_CoM[group_id - node_offset].z -= global_group_CoM[i].z;
+      group_size[group_id - node_offset] -= orig_global_group_size[i];
+
+      /* Store local root if the group is big enough. */
+      if (global_group_size[group_id_index] >= min_group_size)
+        (*local_roots)[local_root_count++] = group_id - node_offset;
+    }
+
+    /* If the group linked to a local root update its size. */
+    if (is_local(new_root, nr_gparts) && new_root != group_id) {
+
+      /* Calculate the CoM of each distinct group. */
+      double CoM_x_old = group_CoM[new_root - node_offset].x /
+                         group_mass[new_root - node_offset];
+      double CoM_y_old = group_CoM[new_root - node_offset].y /
+                         group_mass[new_root - node_offset];
+      double CoM_z_old = group_CoM[new_root - node_offset].z /
+                         group_mass[new_root - node_offset];
+      double CoM_x = global_group_CoM[i].x / global_group_mass[i];
+      double CoM_y = global_group_CoM[i].y / global_group_mass[i];
+      double CoM_z = global_group_CoM[i].z / global_group_mass[i];
+
+      /* Periodically wrap the CoM of the group being linked across the domain
+       * based upon the location of the other CoM location. */
+      if (CoM_x_old > 0.5 * dim[0] && CoM_x < 0.5 * dim[0])
+        CoM_x += dim[0];
+      else if (CoM_x_old <= 0.5 * dim[0] && CoM_x > 0.5 * dim[0])
+        CoM_x -= dim[0];
+
+      if (CoM_y_old > 0.5 * dim[1] && CoM_y < 0.5 * dim[1])
+        CoM_y += dim[1];
+      else if (CoM_y_old <= 0.5 * dim[1] && CoM_y > 0.5 * dim[1])
+        CoM_y -= dim[1];
+
+      if (CoM_z_old > 0.5 * dim[2] && CoM_z < 0.5 * dim[2])
+        CoM_z += dim[2];
+      else if (CoM_z_old <= 0.5 * dim[2] && CoM_z > 0.5 * dim[2])
+        CoM_z -= dim[2];
+
+      /* Update the CoM. */
+      group_CoM[new_root - node_offset].x += (CoM_x * global_group_mass[i]);
+      group_CoM[new_root - node_offset].y += (CoM_y * global_group_mass[i]);
+      group_CoM[new_root - node_offset].z += (CoM_z * global_group_mass[i]);
+
+      /* Use group sizes before Union-Find */
+      group_size[new_root - node_offset] += orig_global_group_size[i];
+      group_mass[new_root - node_offset] += global_group_mass[i];
+    }
+  }
 
 #if 0
   
@@ -1563,16 +1650,16 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
           clocks_from_ticks(getticks() - tic), clocks_getunit());
 
 #endif
-  
+
   /* Clean up memory. */
-/*   free(global_group_links); */
-/*   free(global_group_index); */
-/*   free(global_group_size); */
-/*   free(global_group_mass); */
-/*   free(global_group_id); */
-/* #ifdef UNION_BY_SIZE_OVER_MPI */
-/*   free(orig_global_group_size); */
-/* #endif */
+  /*   free(global_group_links); */
+  /*   free(global_group_index); */
+  /*   free(global_group_size); */
+  /*   free(global_group_mass); */
+  /*   free(global_group_id); */
+  /* #ifdef UNION_BY_SIZE_OVER_MPI */
+  /*   free(orig_global_group_size); */
+  /* #endif */
 
   message("Rank %d finished linking local roots to foreign roots.",
           engine_rank);
