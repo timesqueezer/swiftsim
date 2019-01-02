@@ -261,8 +261,8 @@ __attribute__((always_inline)) INLINE static void runner_iact_viscosity_force(
   const float v_sig = ci + cj - const_viscosity_beta * mu_ij;
 
   /* Grab balsara switches */
-  const float balsara_i = pi->force.balsara;
-  const float balsara_j = pj->force.balsara;
+  const float balsara_i = pi->viscosity.force.balsara;
+  const float balsara_j = pj->viscosity.force.balsara;
 
   /* Construct the full viscosity term */
   const float rho_ij = 0.5f * (rhoi + rhoj);
@@ -366,8 +366,8 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
   const float v_sig = ci + cj - const_viscosity_beta * mu_ij;
 
   /* Grab balsara switches */
-  const float balsara_i = pi->force.balsara;
-  const float balsara_j = pj->force.balsara;
+  const float balsara_i = pi->viscosity.force.balsara;
+  const float balsara_j = pj->viscosity.force.balsara;
 
   /* Construct the full viscosity term */
   const float rho_ij = 0.5f * (rhoi + rhoj);

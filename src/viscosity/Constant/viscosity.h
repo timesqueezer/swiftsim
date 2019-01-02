@@ -49,9 +49,8 @@ float viscosity_compute_timestep(
     const struct part *restrict p, const struct xpart *restrict xp,
     const struct hydro_props *restrict hydro_properties,
     const struct cosmology *restrict cosmo) {
-  return FLT_MAX;    
+  return FLT_MAX;
 }
-
 
 /**
  * @brief Prepares a particle for the density calculation.
@@ -62,16 +61,14 @@ float viscosity_compute_timestep(
  * @param p The particle to act upon
  * @param hs #hydro_space containing hydro specific space information.
  */
-void viscosity_init_part(
-    struct part *restrict p, const struct hydro_space *hs) {
+void viscosity_init_part(struct part *restrict p,
+                         const struct hydro_space *hs) {
 
-          p->viscosity.density.div_v = 0.f;
+  p->viscosity.density.div_v = 0.f;
   p->viscosity.density.rot_v[0] = 0.f;
   p->viscosity.density.rot_v[1] = 0.f;
   p->viscosity.density.rot_v[2] = 0.f;
-
-    }
-
+}
 
 /**
  * @brief Finishes the density calculation.
@@ -82,8 +79,8 @@ void viscosity_init_part(
  * @param p The particle to act upon
  * @param cosmo The current cosmological model.
  */
-void viscosity_end_density(
-    struct part *restrict p, const struct cosmology *cosmo) {
+void viscosity_end_density(struct part *restrict p,
+                           const struct cosmology *cosmo) {
 
   const float rho_inv = 1.f / p->rho;
   const float a_inv2 = cosmo->a2_inv;
@@ -95,9 +92,7 @@ void viscosity_end_density(
 
   /* Finish calculation of the (physical) velocity divergence */
   p->viscosity.density.div_v *= h_inv_dim_plus_one * a_inv2 * rho_inv;
-
-    }
-
+}
 
 /**
  * @brief Sets all particle fields to sensible values when the #part has 0 ngbs.
@@ -106,18 +101,14 @@ void viscosity_end_density(
  * @param xp The extended particle data to act upon
  * @param cosmo The current cosmological model.
  */
-void viscosity_part_has_no_neighbours(
-    struct part *restrict p, struct xpart *restrict xp,
-    const struct cosmology *cosmo) {
+void viscosity_part_has_no_neighbours(struct part *restrict p,
+                                      struct xpart *restrict xp,
+                                      const struct cosmology *cosmo) {
   p->viscosity.density.div_v = 0.f;
   p->viscosity.density.rot_v[0] = 0.f;
   p->viscosity.density.rot_v[1] = 0.f;
   p->viscosity.density.rot_v[2] = 0.f;
-
-    }
-
-
-
+}
 
 /**
  * @brief Prepare a particle for the gradient calculation.
@@ -131,9 +122,9 @@ void viscosity_part_has_no_neighbours(
  * @param xp The extended particle data to act upon.
  * @param cosmo The cosmological model.
  */
-void viscosity_prepare_gradient(
-    struct part* restrict p, struct xpart* restrict xp,
-    const struct cosmology* cosmo) {}
+void viscosity_prepare_gradient(struct part *restrict p,
+                                struct xpart *restrict xp,
+                                const struct cosmology *cosmo) {}
 
 /**
  * @brief Resets the variables that are required for a gradient calculation.
@@ -144,9 +135,7 @@ void viscosity_prepare_gradient(
  * @param xp The extended particle data to act upon.
  * @param cosmo The cosmological model.
  */
-void viscosity_reset_gradient(
-    struct part* restrict p) {}
-
+void viscosity_reset_gradient(struct part *restrict p) {}
 
 /**
  * @brief Finishes the gradient calculation.
@@ -178,10 +167,10 @@ __attribute__((always_inline)) INLINE static void viscosity_end_gradient(
  * @param dt_alpha The time-step used to evolve non-cosmological quantities such
  *                 as the artificial viscosity.
  */
-void viscosity_prepare_force(
-    struct part *restrict p, struct xpart *restrict xp,
-    const struct cosmology *cosmo, const struct hydro_props *hydro_props,
-    const float dt_alpha) {
+void viscosity_prepare_force(struct part *restrict p, struct xpart *restrict xp,
+                             const struct cosmology *cosmo,
+                             const struct hydro_props *hydro_props,
+                             const float dt_alpha) {
 
   const float fac_Balsara_eps = cosmo->a_factor_Balsara_eps;
 
@@ -189,14 +178,14 @@ void viscosity_prepare_force(
   const float h_inv = 1.f / p->h;
 
   /* Compute the norm of the curl */
-  const float curl_v = sqrtf(p->viscosity.density.rot_v[0] * p->viscosity.density.rot_v[0] +
-                             p->viscosity.density.rot_v[1] * p->viscosity.density.rot_v[1] +
-                             p->viscosity.density.rot_v[2] * p->viscosity.density.rot_v[2]);
+  const float curl_v =
+      sqrtf(p->viscosity.density.rot_v[0] * p->viscosity.density.rot_v[0] +
+            p->viscosity.density.rot_v[1] * p->viscosity.density.rot_v[1] +
+            p->viscosity.density.rot_v[2] * p->viscosity.density.rot_v[2]);
 
   /* Compute the norm of div v including the Hubble flow term */
   const float div_physical_v = p->viscosity.density.div_v + 3.f * cosmo->H;
   const float abs_div_physical_v = fabsf(div_physical_v);
-
 
   /* Compute the Balsara switch */
   /* Pre-multiply in the AV factor; hydro_props are not passed to the iact
@@ -206,9 +195,7 @@ void viscosity_prepare_force(
                          0.0001f * fac_Balsara_eps * soundspeed * h_inv);
 
   p->viscosity.force.balsara = balsara;
-
-    }
-
+}
 
 /**
  * @brief Finishes the force calculation.
@@ -218,8 +205,8 @@ void viscosity_prepare_force(
  * @param p The particle to act upon
  * @param cosmo The current cosmological model.
  */
-void viscosity_end_force(
-    struct part *restrict p, const struct cosmology *cosmo) {}
+void viscosity_end_force(struct part *restrict p,
+                         const struct cosmology *cosmo) {}
 
 /**
  * @brief Initialises the particles for the first time
@@ -230,10 +217,10 @@ void viscosity_end_force(
  * @param p The particle to act upon
  * @param xp The extended particle data to act upon
  */
-void viscosity_first_init_part(
-    struct part *restrict p, struct xpart *restrict xp) {
+void viscosity_first_init_part(struct part *restrict p,
+                               struct xpart *restrict xp) {
 
-        viscosity_init_part(p, NULL);
-    }
+  viscosity_init_part(p, NULL);
+}
 
 #endif /* SWIFT_CONSTANT_VISCOSITY_H */
