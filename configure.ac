@@ -1156,6 +1156,15 @@ AC_ARG_WITH([hydro],
    [with_hydro="gadget2"]
 )
 
+# Viscosity scheme.
+AC_ARG_WTIH([viscosity],
+   [AS_HELP_STRING([--with-viscosity=<scheme>],
+      [Viscosity scheme to use @<:@none, anarchy, balsara, constant default: constant@:>@]
+   ])
+   [with_viscosity="$withval"],
+   [with_viscosity="constant"]
+)
+
 if test "$with_subgrid" != "none"; then
    if test "$with_hydro" != "gadget2"; then
       AC_MSG_ERROR([Cannot provide with-subgrid and with-hydro together])
@@ -1199,6 +1208,16 @@ case "$with_hydro" in
 
    *)
       AC_MSG_ERROR([Unknown hydrodynamics scheme: $with_hydro])
+   ;;
+esac
+
+case "$with_viscosity" in
+   constant)
+      AC_DEFINE([CONSTANT_VISCOSITY], [1], [Constant artificial viscosity])
+   ;;
+  
+   *)
+      AC_MSG_ERROR([Unknown viscosity scheme: $with_viscosity])
    ;;
 esac
 
