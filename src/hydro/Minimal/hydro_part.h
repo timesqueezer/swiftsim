@@ -33,6 +33,7 @@
  */
 
 #include "chemistry_struct.h"
+#include "viscosity_struct.h"
 #include "cooling_struct.h"
 
 /**
@@ -124,12 +125,6 @@ struct part {
       /*! Derivative of density with respect to h */
       float rho_dh;
 
-      /*! Velocity divergence */
-      float div_v;
-
-      /*! Velocity curl */
-      float rot_v[3];
-
     } density;
 
     /**
@@ -156,14 +151,14 @@ struct part {
       /*! Time derivative of smoothing length  */
       float h_dt;
 
-      /*! Balsara switch */
-      float balsara;
-
     } force;
   };
 
   /* Chemistry information */
   struct chemistry_part_data chemistry_data;
+
+  /* Viscosity information */
+  struct viscosity_part_data viscosity_data;
 
   /*! Time-step length */
   timebin_t time_bin;

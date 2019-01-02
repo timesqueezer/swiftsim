@@ -389,10 +389,7 @@ __attribute__((always_inline)) INLINE static void hydro_init_part(
   p->density.wcount_dh = 0.f;
   p->rho = 0.f;
   p->density.rho_dh = 0.f;
-  p->density.div_v = 0.f;
-  p->density.rot_v[0] = 0.f;
-  p->density.rot_v[1] = 0.f;
-  p->density.rot_v[2] = 0.f;
+
 }
 
 /**
@@ -429,16 +426,6 @@ __attribute__((always_inline)) INLINE static void hydro_end_density(
   p->density.wcount *= h_inv_dim;
   p->density.wcount_dh *= h_inv_dim_plus_one;
 
-  const float rho_inv = 1.f / p->rho;
-  const float a_inv2 = cosmo->a2_inv;
-
-  /* Finish calculation of the (physical) velocity curl components */
-  p->density.rot_v[0] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
-  p->density.rot_v[1] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
-  p->density.rot_v[2] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
-
-  /* Finish calculation of the (physical) velocity divergence */
-  p->density.div_v *= h_inv_dim_plus_one * a_inv2 * rho_inv;
 }
 
 /**
@@ -466,10 +453,7 @@ __attribute__((always_inline)) INLINE static void hydro_part_has_no_neighbours(
   p->density.wcount = kernel_root * h_inv_dim;
   p->density.rho_dh = 0.f;
   p->density.wcount_dh = 0.f;
-  p->density.div_v = 0.f;
-  p->density.rot_v[0] = 0.f;
-  p->density.rot_v[1] = 0.f;
-  p->density.rot_v[2] = 0.f;
+
 }
 
 /**
@@ -525,6 +509,8 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
   const float balsara = hydro_props->viscosity.alpha * abs_div_physical_v /
                         (abs_div_physical_v + curl_v +
                          0.0001f * fac_Balsara_eps * soundspeed * h_inv);
+
+  viscosity_prepare_force(p, xp, vosmo, hydro_props, dt_alpha);
 
   /* Update variables. */
   p->force.f = grad_h_term;

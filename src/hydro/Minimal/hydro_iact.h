@@ -88,32 +88,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_density(
   pj->density.wcount += wj;
   pj->density.wcount_dh -= (hydro_dimension * wj + uj * wj_dx);
 
-  /* Compute dv dot r */
-  float dv[3], curlvr[3];
-
-  const float faci = mj * wi_dx * r_inv;
-  const float facj = mi * wj_dx * r_inv;
-
-  dv[0] = pi->v[0] - pj->v[0];
-  dv[1] = pi->v[1] - pj->v[1];
-  dv[2] = pi->v[2] - pj->v[2];
-  const float dvdr = dv[0] * dx[0] + dv[1] * dx[1] + dv[2] * dx[2];
-
-  pi->density.div_v -= faci * dvdr;
-  pj->density.div_v -= facj * dvdr;
-
-  /* Compute dv cross r */
-  curlvr[0] = dv[1] * dx[2] - dv[2] * dx[1];
-  curlvr[1] = dv[2] * dx[0] - dv[0] * dx[2];
-  curlvr[2] = dv[0] * dx[1] - dv[1] * dx[0];
-
-  pi->density.rot_v[0] += faci * curlvr[0];
-  pi->density.rot_v[1] += faci * curlvr[1];
-  pi->density.rot_v[2] += faci * curlvr[2];
-
-  pj->density.rot_v[0] += facj * curlvr[0];
-  pj->density.rot_v[1] += facj * curlvr[1];
-  pj->density.rot_v[2] += facj * curlvr[2];
 }
 
 /**
@@ -157,26 +131,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_density(
   pi->density.wcount += wi;
   pi->density.wcount_dh -= (hydro_dimension * wi + ui * wi_dx);
 
-  /* Compute dv dot r */
-  float dv[3], curlvr[3];
-
-  const float faci = mj * wi_dx * r_inv;
-
-  dv[0] = pi->v[0] - pj->v[0];
-  dv[1] = pi->v[1] - pj->v[1];
-  dv[2] = pi->v[2] - pj->v[2];
-  const float dvdr = dv[0] * dx[0] + dv[1] * dx[1] + dv[2] * dx[2];
-
-  pi->density.div_v -= faci * dvdr;
-
-  /* Compute dv cross r */
-  curlvr[0] = dv[1] * dx[2] - dv[2] * dx[1];
-  curlvr[1] = dv[2] * dx[0] - dv[0] * dx[2];
-  curlvr[2] = dv[0] * dx[1] - dv[1] * dx[0];
-
-  pi->density.rot_v[0] += faci * curlvr[0];
-  pi->density.rot_v[1] += faci * curlvr[1];
-  pi->density.rot_v[2] += faci * curlvr[2];
 }
 
 /**
@@ -201,10 +155,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
   if (pj->time_bin == time_bin_inhibited)
     error("Inhibited pj in interaction function!");
 #endif
-
-  /* Cosmological factors entering the EoMs */
-  const float fac_mu = pow_three_gamma_minus_five_over_two(a);
-  const float a2_Hubble = a * a * H;
 
   /* Get r and r inverse. */
   const float r_inv = 1.0f / sqrtf(r2);
@@ -243,35 +193,12 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
                      (pi->v[1] - pj->v[1]) * dx[1] +
                      (pi->v[2] - pj->v[2]) * dx[2];
 
-  /* Add Hubble flow */
-  const float dvdr_Hubble = dvdr + a2_Hubble * r2;
-
-  /* Are the particles moving towards each others ? */
-  const float omega_ij = min(dvdr_Hubble, 0.f);
-  const float mu_ij = fac_mu * r_inv * omega_ij; /* This is 0 or negative */
-
-  /* Compute sound speeds and signal velocity */
-  const float ci = pi->force.soundspeed;
-  const float cj = pj->force.soundspeed;
-  const float v_sig = ci + cj - const_viscosity_beta * mu_ij;
-
-  /* Grab balsara switches */
-  const float balsara_i = pi->force.balsara;
-  const float balsara_j = pj->force.balsara;
-
-  /* Construct the full viscosity term */
-  const float rho_ij = 0.5f * (rhoi + rhoj);
-  const float visc = -0.25f * v_sig * (balsara_i + balsara_j) * mu_ij / rho_ij;
-
-  /* Convolve with the kernel */
-  const float visc_acc_term = 0.5f * visc * (wi_dr + wj_dr) * r_inv;
-
   /* SPH acceleration term */
   const float sph_acc_term =
       (P_over_rho2_i * wi_dr + P_over_rho2_j * wj_dr) * r_inv;
 
   /* Assemble the acceleration */
-  const float acc = sph_acc_term + visc_acc_term;
+  const float acc = sph_acc_term;
 
   /* Use the force Luke ! */
   pi->a_hydro[0] -= mj * acc * dx[0];
@@ -286,12 +213,9 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
   const float sph_du_term_i = P_over_rho2_i * dvdr * r_inv * wi_dr;
   const float sph_du_term_j = P_over_rho2_j * dvdr * r_inv * wj_dr;
 
-  /* Viscosity term */
-  const float visc_du_term = 0.5f * visc_acc_term * dvdr_Hubble;
-
   /* Assemble the energy equation term */
-  const float du_dt_i = sph_du_term_i + visc_du_term;
-  const float du_dt_j = sph_du_term_j + visc_du_term;
+  const float du_dt_i = sph_du_term_i;
+  const float du_dt_j = sph_du_term_j;
 
   /* Internal energy time derivatibe */
   pi->u_dt += du_dt_i * mj;
@@ -301,9 +225,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
   pi->force.h_dt -= mj * dvdr * r_inv / rhoj * wi_dr;
   pj->force.h_dt -= mi * dvdr * r_inv / rhoi * wj_dr;
 
-  /* Update the signal velocity. */
-  pi->force.v_sig = max(pi->force.v_sig, v_sig);
-  pj->force.v_sig = max(pj->force.v_sig, v_sig);
 }
 
 /**

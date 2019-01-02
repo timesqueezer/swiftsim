@@ -32,15 +32,24 @@
  */
 
 /* Viscosity information for given particle */
-struct viscosity_part {
+struct viscosity_data {
 
   /* TODO: Union this */
 
   struct {
 
+    /*! Velocity divergence */
+    float div_v;
+
+    /*! Velocity curl */
+    float rot_v[3];
+
   } density;
 
   struct {
+
+    /*! The alpha (usually this is alpha * switch) */
+    float alpha;
 
   } force;
 
