@@ -884,33 +884,49 @@ void fof_find_foreign_links_mapper(void *map_data, int num_elements,
 
     /* Copy the local links to the global list. */
     for (int i = 0; i < local_link_count; i++) {
-      (*group_links)[*group_link_count + i].group_i =
+
+      int found = 0;
+
+      /* Check that the links have not already been added to the list. */
+      for(int l=0; l<*group_link_count; l++) {
+        if((*group_links)[l].group_i == local_group_links[i].group_i && (*group_links)[l].group_j == local_group_links[i].group_j) {
+          found = 1;
+          break;
+        }
+      }
+
+      if(!found) {
+
+        (*group_links)[*group_link_count + 0].group_i =
           local_group_links[i].group_i;
-      (*group_links)[*group_link_count + i].group_i_size =
+        (*group_links)[*group_link_count + 0].group_i_size =
           local_group_links[i].group_i_size;
-      (*group_links)[*group_link_count + i].group_i_mass =
+        (*group_links)[*group_link_count + 0].group_i_mass =
           local_group_links[i].group_i_mass;
-      (*group_links)[*group_link_count + i].group_i_CoM.x =
+        (*group_links)[*group_link_count + 0].group_i_CoM.x =
           local_group_links[i].group_i_CoM.x;
-      (*group_links)[*group_link_count + i].group_i_CoM.y =
+        (*group_links)[*group_link_count + 0].group_i_CoM.y =
           local_group_links[i].group_i_CoM.y;
-      (*group_links)[*group_link_count + i].group_i_CoM.z =
+        (*group_links)[*group_link_count + 0].group_i_CoM.z =
           local_group_links[i].group_i_CoM.z;
 
-      (*group_links)[*group_link_count + i].group_j =
+        (*group_links)[*group_link_count + 0].group_j =
           local_group_links[i].group_j;
-      (*group_links)[*group_link_count + i].group_j_size =
+        (*group_links)[*group_link_count + 0].group_j_size =
           local_group_links[i].group_j_size;
-      (*group_links)[*group_link_count + i].group_j_mass =
+        (*group_links)[*group_link_count + 0].group_j_mass =
           local_group_links[i].group_j_mass;
-      (*group_links)[*group_link_count + i].group_j_CoM.x =
+        (*group_links)[*group_link_count + 0].group_j_CoM.x =
           local_group_links[i].group_j_CoM.x;
-      (*group_links)[*group_link_count + i].group_j_CoM.y =
+        (*group_links)[*group_link_count + 0].group_j_CoM.y =
           local_group_links[i].group_j_CoM.y;
-      (*group_links)[*group_link_count + i].group_j_CoM.z =
+        (*group_links)[*group_link_count + 0].group_j_CoM.z =
           local_group_links[i].group_j_CoM.z;
+
+        (*group_link_count) = (*group_link_count) + 1;
+      }
     }
-    (*group_link_count) += local_link_count;
+    //(*group_link_count) += local_link_count;
   }
 
   /* Release lock. */
@@ -1312,21 +1328,24 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 
         // TO DO: Do we really need a symmetric search here?
 
+        /* Need to search all elements to get the 1st occurrence of the group ID. */
+        my_search_start = 0;
         /* Check whether the group already exists */
         for (size_t i = my_search_start; i < my_search_end; ++i) {
           if (global_group_id[i] == global_group_id[k]) {
-            find_i = global_group_links[i].group_offset_i;
+            find_i = i;//global_group_links[i].group_offset_i;
             break;
           }
         }
+        //find_i = k;
 
-        /* for (size_t j = my_work_start; j < my_work_end; j++) { */
-        /*   if (global_group_id[j] == global_group_id[k + 1]) { */
-        /*     find_j =  */
-        /*     break; */
-        /*   } */
-        /* } */
-	find_j = k + 1;
+        for (size_t j = my_work_start; j < my_work_end; j++) {
+          if (global_group_id[j] == global_group_id[k + 1]) {
+            find_j = j; 
+            break;
+          }
+        }
+        //find_j = k + 1;
 	
         /* if(find_i == -1 && find_j == -1) */
         /*   error("We f***ed up! find_i=%d find_j=%d pair=(%zd %zd)", find_i,
@@ -1359,10 +1378,14 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 
     /* Now we need to broadcast what we have done to everyone */
 
+    if (step != number_steps - 1) {
     // TO DO: Better MPI type for size_t !!
     MPI_Allgatherv(MPI_IN_PLACE, /*send_count=*/0, MPI_DATATYPE_NULL,
                    global_group_index, group_link_counts, comm_offset,
                    MPI_LONG_LONG, MPI_COMM_WORLD);
+    }
+    /* The last step is performed by rank 0 so only a MPI_Bcast is required. */
+    else MPI_Bcast(global_group_index, global_group_list_size, MPI_LONG_LONG, 0, MPI_COMM_WORLD);
 
     /* Update the counts and offsets for the next round */
     if (step != number_steps) {
@@ -1371,10 +1394,10 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 
         /* New value of the counts for this rank */
         if (i % (1 << (step + 1)) == 0) {
-          int count = 0;
-          for (int j = i; j < i + (1 << (step + 1)); ++j)
-            count += group_link_counts[j];
-          group_link_counts[i] = count;
+        
+          size_t my_work_start_new = offset[min(i + (1 << (step + 1)), e->nr_nodes)];
+          size_t my_work_end_new = offset[min(i + (1 << (step + 1 + 1)), e->nr_nodes)];
+          group_link_counts[i] = my_work_end_new - my_work_start_new;
         } else {
           group_link_counts[i] = 0;
         }
@@ -1386,13 +1409,13 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
       }
 
       //#ifdef SWIFT_DEBUG_CHECKS
-      int count_check = 0;
-      for (int i = 0; i < e->nr_nodes; ++i) {
-        count_check += group_link_counts[i];
-      }
-      if (count_check != global_group_list_size) {
-        error("Something went wrong creating the new list of counts");
-      }
+      //int count_check = 0;
+      //for (int i = 0; i < e->nr_nodes; ++i) {
+      //  count_check += group_link_counts[i];
+      //}
+      //if (count_check != global_group_list_size) {
+      //  error("Something went wrong creating the new list of counts");
+      //}
       //#endif
     }
 
