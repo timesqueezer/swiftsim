@@ -1331,7 +1331,8 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
         /* Need to search all elements to get the 1st occurrence of the group ID. */
         my_search_start = 0;
         /* Check whether the group already exists */
-        for (size_t i = my_search_start; i < my_search_end; ++i) {
+        //for (size_t i = my_search_start; i < my_search_end; ++i) {
+        for (size_t i = 0; i < global_group_link_count * 2; ++i) {
           if (global_group_id[i] == global_group_id[k]) {
             find_i = i;//global_group_links[i].group_offset_i;
             break;
@@ -1339,7 +1340,8 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
         }
         //find_i = k;
 
-        for (size_t j = my_work_start; j < my_work_end; j++) {
+        //for (size_t j = my_work_start; j < my_work_end; j++) {
+        for (size_t j = 0; j < global_group_link_count * 2; ++j) {
           if (global_group_id[j] == global_group_id[k + 1]) {
             find_j = j; 
             break;
@@ -1424,6 +1426,11 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
+  message("global_group_index construction took: %.3f %s.",
+          clocks_from_ticks(getticks() - tic), clocks_getunit());
+
+  tic = getticks();
+
   if (posix_memalign((void **)local_roots, SWIFT_STRUCT_ALIGNMENT,
                      global_group_list_size * sizeof(size_t)) != 0)
     error("Error while allocating memory for local roots");
@@ -1504,6 +1511,8 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
     }
   }
 
+  message("Updating groups locally took: %.3f %s.",
+          clocks_from_ticks(getticks() - tic), clocks_getunit());
 #if 0
   
   /* Store each group ID and its properties. */
