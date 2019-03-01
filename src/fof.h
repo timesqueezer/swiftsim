@@ -65,6 +65,13 @@ struct fof_mpi {
 
 } SWIFT_STRUCT_ALIGN;
 
+/* MPI message used for linking FoF fragments between nodes */
+struct fof_mpi_links {
+  size_t group_i;     /* Index of the local group */
+  size_t group_j;     /* Index of the remote group */
+  size_t min_group_index; /* Minimum group index associated with this link */
+} SWIFT_STRUCT_ALIGN;
+
 struct fof {
 
   size_t *group_index;

@@ -181,6 +181,28 @@ int cmp_func(const void *a, const void *b) {
     return 0;
 }
 
+int compare_fof_mpi_links_group_i(const void *a, const void *b) {
+  struct fof_mpi_links *struct_a = (struct fof_mpi_links *)a;
+  struct fof_mpi_links *struct_b = (struct fof_mpi_links *)b;
+  if(struct_b->group_i > struct_a->group_i)
+    return 1;
+  else if(struct_b->group_i < struct_a->group_i)
+    return -1;
+  else
+    return 0;
+}
+
+int compare_fof_mpi_links_group_j(const void *a, const void *b) {
+  struct fof_mpi_links *struct_a = (struct fof_mpi_links *)a;
+  struct fof_mpi_links *struct_b = (struct fof_mpi_links *)b;
+  if(struct_b->group_j > struct_a->group_j)
+    return 1;
+  else if(struct_b->group_j < struct_a->group_j)
+    return -1;
+  else
+    return 0;
+}
+
 /* Finds the global root ID of the group a particle exists in. */
 __attribute__((always_inline)) INLINE static size_t fof_find_global(
     const size_t i, size_t *group_index) {
@@ -1175,6 +1197,169 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   /* Gather the total number of links on each rank. */
   MPI_Allgather(&group_link_count, 1, MPI_INT, group_link_counts, 1, MPI_INT,
                 MPI_COMM_WORLD);
+
+  /*
+
+    New MPI stitching between nodes
+    -------------------------------
+
+    For each local fragment we want to find the lowest ID of any
+    fragment it is linked to (even through multiple hops).
+
+  */
+
+  /* Allocate storage for minimum ID of each local group */
+  size_t *group_index_min = malloc(nr_gparts * sizeof(int));
+  for(size_t i=0;i<nr_gparts;i+=1)
+    group_index_min[i] = group_index[i];
+
+  /* Make array of local links then sort by remote group index */
+  struct fof_mpi_links *links_local = malloc(group_link_count*sizeof(struct fof_mpi_links));
+  for(int i=0;i<group_link_count;i+=1)
+    {
+      links_local[i].group_i = group_links[i].group_i; /* Index of local fragment */
+      links_local[i].group_j = group_links[i].group_j; /* Index of remote fragment */
+      links_local[i].min_group_index = group_links[i].group_i;
+    }
+  qsort(links_local, group_link_count, sizeof(struct fof_mpi_links), 
+        compare_fof_mpi_links_group_j);
+
+  /* Find range of group indexes stored on each node */
+  size_t *first_on_node = malloc(sizeof(size_t)*e->nr_nodes);
+  MPI_Allgather(&node_offset, 1, MPI_INT, first_on_node, 1, MPI_INT,
+                MPI_COMM_WORLD);
+  size_t *num_on_node = malloc(sizeof(size_t)*e->nr_nodes);
+  MPI_Allgather(&nr_gparts, 1, MPI_INT, num_on_node, 1, MPI_INT,
+                MPI_COMM_WORLD);
+  
+  /* Find number of local links which point to each task */
+  int *sendcount = malloc(sizeof(int)*e->nr_nodes);
+  for(int i=0; i<e->nr_nodes; i+=1)
+    sendcount[i] = 0;
+  int dest = 0;
+  for(int i=0;i<group_link_count;i+=1)
+    {
+      while((first_on_node[dest] > links_local[i].group_j) || (num_on_node[dest]==0))
+        dest += 1;
+      sendcount[dest] += 1;
+    }
+  free(first_on_node);
+  free(num_on_node);
+
+  /* Determine number of links to receive */
+  int *recvcount = malloc(sizeof(int)*e->nr_nodes);
+  MPI_Alltoall(sendcount, 1, MPI_INT, recvcount, 1, MPI_INT, MPI_COMM_WORLD);
+
+  /* Compute send/recv offsets */
+  int *sendoffset = malloc(sizeof(int)*e->nr_nodes);
+  sendoffset[0] = 0;
+  for(int i=1;i<e->nr_nodes;i+=1)
+    sendoffset[i] = sendoffset[i-1] + sendcount[i-1];
+  int *recvoffset = malloc(sizeof(int)*e->nr_nodes);
+  recvoffset[0] = 0;
+  for(int i=1;i<e->nr_nodes;i+=1)
+    recvoffset[i] = recvoffset[i-1] + recvcount[i-1];
+
+  /* Set up MPI type to exchange link info */
+  MPI_Datatype fof_mpi_links_type;
+  if (MPI_Type_contiguous(sizeof(struct fof_mpi_links) / sizeof(unsigned char),
+                          MPI_BYTE, &fof_mpi_links_type) != MPI_SUCCESS ||
+      MPI_Type_commit(&fof_mpi_links_type) != MPI_SUCCESS)
+    {
+      error("Failed to create MPI type for fof_mpi_links.");
+    }
+
+  /* Allocate receive buffer for remote links */
+  int remote_link_count = 0;
+  for(int i=0;i<e->nr_nodes;i+=1)
+    remote_link_count += recvcount[i];
+  struct fof_mpi_links *links_remote = malloc(remote_link_count*sizeof(struct fof_mpi_links));
+  
+  /* Iterate until minimum IDs don't change any more */
+  int num_updated = 0;
+  int num_updated_tot = 0;
+  do
+    {
+      /*
+        Store minimumID for local fragments in links_local.group_min_index.
+        We're going to send each link to the node that contains its target
+        group.
+      */
+      for(int i=0;i<group_link_count;i+=1)
+        links_local[i].min_group_index = group_index_min[links_local[i].group_i-node_offset];
+
+      /*
+        Exchange link info:
+
+        Here we're requesting the minimum IDs associated with each group_j
+        in links_local and receiving the minimum IDs associated with
+        each group_i in links_remote.
+
+        The receive buffer links_remote will contain all links that point at
+        fragments stored on this node.
+      */
+      MPI_Alltoallv(links_local,  sendcount, sendoffset, fof_mpi_links_type,
+                    links_remote, recvcount, recvoffset, fof_mpi_links_type,
+                    MPI_COMM_WORLD);
+
+      /* 
+         Use the received data to update minimumID of local fragments 
+         which are pointed at by a link on a remote node
+      */
+      for(int i=0;i<remote_link_count;i+=1)
+        {
+          if(links_remote[i].min_group_index < group_index_min[links_remote[i].group_j-node_offset])
+            {
+              group_index_min[links_remote[i].group_j-node_offset] = links_remote[i].min_group_index;
+              num_updated += 1;
+            }
+        }
+      
+      /*
+        Store the minimumID for local fragments in links_remote.min_group_index
+      */
+      for(int i=0;i<remote_link_count;i+=1)
+        links_remote[i].min_group_index = group_index_min[links_remote[i].group_j-node_offset];
+      
+      /* 
+         Return results to originating task 
+      */
+      MPI_Alltoallv(links_remote, recvcount, recvoffset, fof_mpi_links_type,
+                    links_local,  sendcount, sendoffset, fof_mpi_links_type,
+                    MPI_COMM_WORLD);
+      
+      /* 
+         Use the received data to update minimumID of local fragments 
+         which have links to a frgament on a remote node.
+      */
+      for(int i=0;i<group_link_count;i+=1)
+        {
+          if(links_local[i].min_group_index < group_index_min[links_local[i].group_i-node_offset])
+            {
+              group_index_min[links_local[i].group_i-node_offset] = links_local[i].min_group_index;
+              num_updated += 1;
+            }
+        }
+      
+      /* Check if we updated any minimum IDs on this iteration */
+      MPI_Allreduce(&num_updated, &num_updated_tot, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    } while(num_updated_tot > 0);
+
+  /* Tidy up */
+  MPI_Type_free(&fof_mpi_links_type);
+  free(sendcount);
+  free(recvcount);
+  free(sendoffset);
+  free(recvoffset);
+  free(links_local);
+  free(links_remote);
+  free(group_index_min);
+
+  /*
+    End of new MPI section - currently we don't actually use the result!
+  */
+
 
   /* Set the displacements into the global link list using the link counts from
    * each rank */
