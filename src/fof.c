@@ -162,7 +162,7 @@ void fof_init(struct space *s) {
 }
 
 /*
- * Sort elements in descending order.
+ * Sort elements in DESCENDING order.
  *
  * Return value meaning
  * <0 The element pointed by b goes before the element pointed by a
@@ -181,24 +181,16 @@ int cmp_func(const void *a, const void *b) {
     return 0;
 }
 
-int compare_fof_mpi_links_group_i(const void *a, const void *b) {
-  struct fof_mpi_links *struct_a = (struct fof_mpi_links *)a;
-  struct fof_mpi_links *struct_b = (struct fof_mpi_links *)b;
-  if(struct_b->group_i > struct_a->group_i)
-    return 1;
-  else if(struct_b->group_i < struct_a->group_i)
-    return -1;
-  else
-    return 0;
-}
-
+/*
+  Comparison function to sort links in ASCENDING order of remote group index 
+*/
 int compare_fof_mpi_links_group_j(const void *a, const void *b) {
   struct fof_mpi_links *struct_a = (struct fof_mpi_links *)a;
   struct fof_mpi_links *struct_b = (struct fof_mpi_links *)b;
   if(struct_b->group_j > struct_a->group_j)
-    return 1;
-  else if(struct_b->group_j < struct_a->group_j)
     return -1;
+  else if(struct_b->group_j < struct_a->group_j)
+    return 1;
   else
     return 0;
 }
@@ -1209,7 +1201,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   */
 
   /* Allocate storage for minimum ID of each local group */
-  size_t *group_index_min = malloc(nr_gparts * sizeof(int));
+  size_t *group_index_min = malloc(nr_gparts * sizeof(size_t));
   for(size_t i=0;i<nr_gparts;i+=1)
     group_index_min[i] = group_index[i];
 
@@ -1219,17 +1211,19 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
     {
       links_local[i].group_i = group_links[i].group_i; /* Index of local fragment */
       links_local[i].group_j = group_links[i].group_j; /* Index of remote fragment */
-      links_local[i].min_group_index = group_links[i].group_i;
+      links_local[i].group_index_min = 0; /* Will contain group_index_min value to send */
     }
   qsort(links_local, group_link_count, sizeof(struct fof_mpi_links), 
         compare_fof_mpi_links_group_j);
 
   /* Find range of group indexes stored on each node */
   size_t *first_on_node = malloc(sizeof(size_t)*e->nr_nodes);
-  MPI_Allgather(&node_offset, 1, MPI_INT, first_on_node, 1, MPI_INT,
+  MPI_Allgather(&node_offset,  sizeof(size_t), MPI_BYTE, 
+                first_on_node, sizeof(size_t), MPI_BYTE,
                 MPI_COMM_WORLD);
   size_t *num_on_node = malloc(sizeof(size_t)*e->nr_nodes);
-  MPI_Allgather(&nr_gparts, 1, MPI_INT, num_on_node, 1, MPI_INT,
+  MPI_Allgather(&nr_gparts,  sizeof(size_t), MPI_BYTE, 
+                num_on_node, sizeof(size_t), MPI_BYTE,
                 MPI_COMM_WORLD);
   
   /* Find number of local links which point to each task */
@@ -1239,7 +1233,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   int dest = 0;
   for(int i=0;i<group_link_count;i+=1)
     {
-      while((first_on_node[dest] > links_local[i].group_j) || (num_on_node[dest]==0))
+      while((links_local[i].group_j >= first_on_node[dest] + num_on_node[dest]) || (num_on_node[dest]==0))
         dest += 1;
       sendcount[dest] += 1;
     }
@@ -1276,17 +1270,23 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   struct fof_mpi_links *links_remote = malloc(remote_link_count*sizeof(struct fof_mpi_links));
   
   /* Iterate until minimum IDs don't change any more */
-  int num_updated = 0;
   int num_updated_tot = 0;
+  int num_iterations = 0;
   do
     {
+      int num_updated = 0;
+      num_iterations += 1;
       /*
         Store minimumID for local fragments in links_local.group_min_index.
         We're going to send each link to the node that contains its target
         group.
       */
       for(int i=0;i<group_link_count;i+=1)
-        links_local[i].min_group_index = group_index_min[links_local[i].group_i-node_offset];
+        {
+          if((links_local[i].group_i < node_offset) || (links_local[i].group_i >= node_offset+nr_gparts))
+            error("Index of local group is out of range while populating send buffer!");
+          links_local[i].group_index_min = group_index_min[links_local[i].group_i-node_offset];
+        }
 
       /*
         Exchange link info:
@@ -1308,18 +1308,24 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
       */
       for(int i=0;i<remote_link_count;i+=1)
         {
-          if(links_remote[i].min_group_index < group_index_min[links_remote[i].group_j-node_offset])
+          if((links_remote[i].group_j < node_offset) || (links_remote[i].group_j >= node_offset+nr_gparts))
+            error("Index of local group is out of range while updating fragments from remote links!");
+          if(links_remote[i].group_index_min < group_index_min[links_remote[i].group_j-node_offset])
             {
-              group_index_min[links_remote[i].group_j-node_offset] = links_remote[i].min_group_index;
+              group_index_min[links_remote[i].group_j-node_offset] = links_remote[i].group_index_min;
               num_updated += 1;
             }
         }
       
       /*
-        Store the minimumID for local fragments in links_remote.min_group_index
+        Store the minimumID for local fragments in links_remote.group_index_min
       */
       for(int i=0;i<remote_link_count;i+=1)
-        links_remote[i].min_group_index = group_index_min[links_remote[i].group_j-node_offset];
+        {
+          if((links_remote[i].group_j < node_offset) || (links_remote[i].group_j >= node_offset+nr_gparts))
+            error("Index of local group is out of range while populating response buffer!");
+          links_remote[i].group_index_min = group_index_min[links_remote[i].group_j-node_offset];
+        }
       
       /* 
          Return results to originating task 
@@ -1330,13 +1336,15 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
       
       /* 
          Use the received data to update minimumID of local fragments 
-         which have links to a frgament on a remote node.
+         which have links to a fragment on a remote node.
       */
       for(int i=0;i<group_link_count;i+=1)
         {
-          if(links_local[i].min_group_index < group_index_min[links_local[i].group_i-node_offset])
+          if((links_local[i].group_i < node_offset) || (links_local[i].group_i >= node_offset+nr_gparts))
+            error("Index of local group is out of range while updating fragments from local links!");
+          if(links_local[i].group_index_min < group_index_min[links_local[i].group_i-node_offset])
             {
-              group_index_min[links_local[i].group_i-node_offset] = links_local[i].min_group_index;
+              group_index_min[links_local[i].group_i-node_offset] = links_local[i].group_index_min;
               num_updated += 1;
             }
         }
@@ -1354,8 +1362,21 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   free(recvoffset);
   free(links_local);
   free(links_remote);
-  free(group_index_min);
 
+  /*
+    Now determine group membership for every particle
+  
+    For particles which are the local root of their FoF group, the array
+    group_index_min contains either the particle's own index (if the
+    particle is the global root of its group) or the index of the real
+    global root on another node if it is not.
+  */
+  
+
+
+
+
+  free(group_index_min);
   /*
     End of new MPI section - currently we don't actually use the result!
   */
