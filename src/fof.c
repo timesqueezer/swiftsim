@@ -370,6 +370,14 @@ __attribute__((always_inline)) INLINE static int is_local(
   return (group_id >= node_offset && group_id < node_offset + nr_gparts);
 }
 
+#ifdef WITH_MPI
+/* Checks whether the rank is active during a step of the MPI group merging. */
+__attribute__((always_inline)) INLINE static int is_active(
+    const int rank, const int step) {
+  return (rank % (1 << step) == 0 && rank % 2 == 0);
+}
+#endif
+
 /* Recurse on a pair of cells and perform a FOF search between cells that are
  * within range. */
 void rec_fof_search_pair(struct cell *restrict ci, struct cell *restrict cj,
@@ -1306,9 +1314,9 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 
   for (int step = 0; step < number_steps; ++step) {
 
-      size_t my_work_start, my_work_end;
-      size_t my_search_start, my_search_end;
-    if (engine_rank % (1 << (step + 1)) == 0 && engine_rank % 2 == 0) {
+    size_t my_work_start, my_work_end;
+    size_t my_search_start, my_search_end;
+    if (is_active(engine_rank, step + 1)) {
 
       if (step == 0) {
 
@@ -1394,15 +1402,14 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
     if (step != number_steps - 1) {
 
       /* Check that the number of links to send by active ranks is correct and that they have the correct offset into the send array. */
-      if (engine_rank % (1 << (step + 1)) == 0 && engine_rank % 2 == 0) {
+      if (is_active(engine_rank, step + 1)) {
         if(my_work_start != comm_offset[engine_rank] && group_links_to_be_sent[engine_rank] != 0) error("\nIncorrect offset. my_work_start: %zu, comm_offset: %d group_links_to_be_sent: %d\n", my_work_start, comm_offset[engine_rank], group_links_to_be_sent[engine_rank]);
         if(my_work_end - my_work_start != group_links_to_be_sent[engine_rank]) error("Incorrect send count!! my_work_end - my_work_start: %zu, group_links_to_be_sent: %d", my_work_end - my_work_start, group_links_to_be_sent[engine_rank]);
       }
       
       /* Check that idle ranks have nothing to send. */
       for (int i = 0; i < e->nr_nodes; ++i) {
-        if (i % (1 << (step + 1)) != 0 && 
-            i % 2 != 0 && group_links_to_be_sent[i] != 0) error("Incorrect send count!!");
+        if (!is_active(i, step + 1) && group_links_to_be_sent[i] != 0) error("Incorrect send count!!");
       }
 
       message("Step: %d Sending: %d comm_offset: %d", step, group_links_to_be_sent[engine_rank], comm_offset[engine_rank]);
@@ -1421,7 +1428,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 
         size_t my_work_start_new = 0;
         /* New value of the counts for this rank */
-        if (i % (1 << (step + 2)) == 0 && i % 2 == 0) {
+        if (is_active(i, step + 2)) {
         
           my_work_start_new = offset[min(i + (1 << (step + 1)), e->nr_nodes)];
           size_t my_work_end_new = offset[min(i + (1 << (step + 1 + 1)), e->nr_nodes)];
@@ -1432,7 +1439,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
         }
 
         /* Update the offsets as well */
-        if (i % (1 << (step + 2)) == 0 && i % 2 == 0) {
+        if (is_active(i, step + 2)) {
           comm_offset[i] = my_work_start_new;
         }
         else {
