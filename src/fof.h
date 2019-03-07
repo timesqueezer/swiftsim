@@ -75,6 +75,17 @@ struct fof_mpi_links {
   size_t group_index_min;
 } SWIFT_STRUCT_ALIGN;
 
+/* MPI message used for updating FoF sizes etc between nodes */
+struct fof_mpi_sizes {
+  /* Index of the local group */
+  size_t group_i;
+  /* Index of the remote group */
+  size_t group_j;
+  /* Number of particles in the local group */
+  size_t size;
+} SWIFT_STRUCT_ALIGN;
+
+
 struct fof {
 
   size_t *group_index;
