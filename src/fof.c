@@ -983,7 +983,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 #ifdef WITH_MPI
 
   struct engine *e = s->e;
-  //const size_t min_group_size = s->fof_data.min_group_size;
+  const size_t min_group_size = s->fof_data.min_group_size;
   size_t *group_index = s->fof_data.group_index;
   size_t *group_size = s->fof_data.group_size;
   double *group_mass = s->fof_data.group_mass;
@@ -1166,9 +1166,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 
   tic = getticks();
 
-  struct fof_mpi *global_group_links = NULL;
   int *displ = NULL, *group_link_counts = NULL;
-  int global_group_link_count = 0;
 
   ticks comms_tic = getticks();
 
@@ -1178,16 +1176,6 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
           clocks_getunit());
 
   comms_tic = getticks();
-
-  /* Sum the total number of links across MPI domains over each MPI rank. */
-  MPI_Allreduce(&group_link_count, &global_group_link_count, 1, MPI_INT,
-                MPI_SUM, MPI_COMM_WORLD);
-
-  /* Unique set of links is half of all group links as each link is found twice
-   * by opposing MPI ranks. */
-  if (posix_memalign((void **)&global_group_links, SWIFT_STRUCT_ALIGNMENT,
-                     global_group_link_count * sizeof(struct fof_mpi)) != 0)
-    error("Error while allocating memory for the global list of group links");
 
   if (posix_memalign((void **)&group_link_counts, SWIFT_STRUCT_ALIGNMENT,
                      e->nr_nodes * sizeof(int)) != 0)
@@ -1223,8 +1211,10 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
       links_local[i].group_j = group_links[i].group_j; /* Index of remote fragment */
       links_local[i].group_index_min = 0; /* Will contain group_index_min value to send */
     }
+  free(group_links);
   qsort(links_local, group_link_count, sizeof(struct fof_mpi_links), 
         compare_fof_mpi_links_group_j);
+
 
   /* Find range of group indexes stored on each node */
   size_t *first_on_node = malloc(sizeof(size_t)*e->nr_nodes);
@@ -1471,7 +1461,21 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   for(size_t i=0; i<nsend_total; i+=1)
     group_size[fof_sizes_local[i].group_i-node_offset] = fof_sizes_local[i].size;
 
+  /* Count local roots above minimum group size */
+  local_root_count = 0;
+  for(size_t i=0; i<nr_gparts; i+=1)
+    if(((group_index[i]==i+node_offset) || (group_index[i] < node_offset)) && (group_size[i] >= min_group_size))
+      local_root_count += 1;
 
+  /* Store indexes of local roots */
+  (*local_roots) = malloc(sizeof(size_t)*local_root_count);
+  local_root_count = 0;
+  for(size_t i=0; i<nr_gparts; i+=1)
+    if(((group_index[i]==i+node_offset) || (group_index[i] < node_offset)) && (group_size[i] >= min_group_size))
+      {
+        (*local_roots)[local_root_count] = i;
+        local_root_count += 1;
+      }
 
   /* Free memory etc */
   free(fof_sizes_local);
@@ -1484,25 +1488,8 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   free(num_on_node);
   MPI_Type_free(&fof_mpi_links_type);
 
-  /*
-    End of new MPI section - currently we don't actually use the result!
-  */
-
-
-  /* /\* Set the displacements into the global link list using the link counts from */
-  /*  * each rank *\/ */
-  /* displ[0] = 0; */
-  /* for (int i = 1; i < e->nr_nodes; i++) */
-  /*   displ[i] = displ[i - 1] + group_link_counts[i - 1]; */
-
-  /* /\* Gather the global link list on all ranks. *\/ */
-  /* MPI_Allgatherv(group_links, group_link_count, fof_mpi_type, */
-  /*                global_group_links, group_link_counts, displ, fof_mpi_type, */
-  /*                MPI_COMM_WORLD); */
-
   /* Clean up memory. */
   free(displ);
-  free(group_links);
 
   message("Communication took: %.3f %s.",
           clocks_from_ticks(getticks() - comms_tic), clocks_getunit());
@@ -1511,228 +1498,6 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
           clocks_getunit());
 
   tic = getticks();
-
-/*   /\* Transform the group IDs to a local list going from 0-group_count so a */
-/*    * union-find can be performed. *\/ */
-/*   size_t *global_group_index = NULL, *global_group_id = NULL, */
-/*          *global_group_size = NULL; */
-/*   double *global_group_mass = NULL; */
-/*   struct fof_CoM *global_group_CoM = NULL; */
-/*   const int global_group_list_size = 2 * global_group_link_count; */
-/*   int group_count = 0; */
-
-/*   if (posix_memalign((void **)&global_group_index, SWIFT_STRUCT_ALIGNMENT, */
-/*                      global_group_list_size * sizeof(size_t)) != 0) */
-/*     error( */
-/*         "Error while allocating memory for the displacement in memory for the " */
-/*         "global group link list"); */
-
-/*   if (posix_memalign((void **)&global_group_id, SWIFT_STRUCT_ALIGNMENT, */
-/*                      global_group_list_size * sizeof(size_t)) != 0) */
-/*     error( */
-/*         "Error while allocating memory for the displacement in memory for the " */
-/*         "global group link list"); */
-
-/*   if (posix_memalign((void **)&global_group_size, SWIFT_STRUCT_ALIGNMENT, */
-/*                      global_group_list_size * sizeof(size_t)) != 0) */
-/*     error( */
-/*         "Error while allocating memory for the displacement in memory for the " */
-/*         "global group link list"); */
-
-/*   if (posix_memalign((void **)&global_group_mass, SWIFT_STRUCT_ALIGNMENT, */
-/*                      global_group_list_size * sizeof(double)) != 0) */
-/*     error( */
-/*         "Error while allocating memory for the displacement in memory for the " */
-/*         "global group link list"); */
-
-/*   if (posix_memalign((void **)&global_group_CoM, SWIFT_STRUCT_ALIGNMENT, */
-/*                      global_group_list_size * sizeof(struct fof_CoM)) != 0) */
-/*     error("Error while allocating memory for the global group CoM."); */
-
-/*   bzero(global_group_size, global_group_list_size * sizeof(size_t)); */
-/*   bzero(global_group_mass, global_group_list_size * sizeof(double)); */
-/*   bzero(global_group_CoM, global_group_list_size * sizeof(struct fof_CoM)); */
-
-/*   /\* Store each group ID and its properties. *\/ */
-/*   for (int i = 0; i < global_group_link_count; i++) { */
-
-/*     size_t group_i = global_group_links[i].group_i; */
-/*     size_t group_j = global_group_links[i].group_j; */
-
-/*     global_group_size[group_count] += global_group_links[i].group_i_size; */
-/*     global_group_mass[group_count] += global_group_links[i].group_i_mass; */
-/*     global_group_CoM[group_count].x += global_group_links[i].group_i_CoM.x; */
-/*     global_group_CoM[group_count].y += global_group_links[i].group_i_CoM.y; */
-/*     global_group_CoM[group_count].z += global_group_links[i].group_i_CoM.z; */
-/*     global_group_id[group_count++] = group_i; */
-
-/*     global_group_size[group_count] += global_group_links[i].group_j_size; */
-/*     global_group_mass[group_count] += global_group_links[i].group_j_mass; */
-/*     global_group_CoM[group_count].x += global_group_links[i].group_j_CoM.x; */
-/*     global_group_CoM[group_count].y += global_group_links[i].group_j_CoM.y; */
-/*     global_group_CoM[group_count].z += global_group_links[i].group_j_CoM.z; */
-/*     global_group_id[group_count++] = group_j; */
-/*   } */
-
-/*   message("Global list compression took: %.3f %s.", */
-/*           clocks_from_ticks(getticks() - tic), clocks_getunit()); */
-
-/*   tic = getticks(); */
-
-/*   /\* Create a global_group_index list of groups across MPI domains so that you */
-/*    * can perform a union-find locally on each node. *\/ */
-/*   /\* The value of which is an offset into global_group_id, which is the actual */
-/*    * root. *\/ */
-/*   for (int i = 0; i < group_count; i++) global_group_index[i] = i; */
-
-/*   /\* Store the original group size before incrementing in the Union-Find. *\/ */
-/*   size_t *orig_global_group_size = NULL; */
-
-/*   if (posix_memalign((void **)&orig_global_group_size, SWIFT_STRUCT_ALIGNMENT, */
-/*                      group_count * sizeof(size_t)) != 0) */
-/*     error( */
-/*         "Error while allocating memory for the displacement in memory for the " */
-/*         "global group link list"); */
-
-/*   for (int i = 0; i < group_count; i++) */
-/*     orig_global_group_size[i] = global_group_size[i]; */
-
-/*   /\* Perform a union-find on the group links. *\/ */
-/*   for (int i = 0; i < global_group_link_count; i++) { */
-
-/*     int find_i = 0, find_j = 0; */
-
-/*     /\* TODO: Sort array to get offset or allocate array for initial root */
-/*      * positions. *\/ */
-/*     /\* Find group offset into global_group_id *\/ */
-/*     for (int j = 0; j < group_count; j++) { */
-/*       if (global_group_id[j] == global_group_links[i].group_i) { */
-/*         find_i = j; */
-/*         break; */
-/*       } */
-/*     } */
-
-/*     for (int j = 0; j < group_count; j++) { */
-/*       if (global_group_id[j] == global_group_links[i].group_j) { */
-/*         find_j = j; */
-/*         break; */
-/*       } */
-/*     } */
-
-/*     /\* Use the offset to find the group's root. *\/ */
-/*     size_t root_i = fof_find(find_i, global_group_index); */
-/*     size_t root_j = fof_find(find_j, global_group_index); */
-
-/*     size_t group_i = global_group_id[root_i]; */
-/*     size_t group_j = global_group_id[root_j]; */
-
-/*     if (group_i == group_j) continue; */
-
-/*     /\* Update roots accordingly. *\/ */
-/*     size_t size_i = global_group_size[root_i]; */
-/*     size_t size_j = global_group_size[root_j]; */
-/* #ifdef UNION_BY_SIZE_OVER_MPI */
-/*     if (size_i < size_j) { */
-/*       global_group_index[root_i] = root_j; */
-/*       global_group_size[root_j] += size_i; */
-/*     } else { */
-/*       global_group_index[root_j] = root_i; */
-/*       global_group_size[root_i] += size_j; */
-/*     } */
-/* #else */
-/*     if (group_j < group_i) { */
-/*       global_group_index[root_i] = root_j; */
-/*       global_group_size[root_j] += size_i; */
-/*     } else { */
-/*       global_group_index[root_j] = root_i; */
-/*       global_group_size[root_i] += size_j; */
-/*     } */
-/* #endif */
-/*   } */
-
-/*   message("global_group_index construction took: %.3f %s.", */
-/*           clocks_from_ticks(getticks() - tic), clocks_getunit()); */
-
-/*   tic = getticks(); */
-
-/*   if (posix_memalign((void **)local_roots, SWIFT_STRUCT_ALIGNMENT, */
-/*                      group_count * sizeof(size_t)) != 0) */
-/*     error("Error while allocating memory for local roots"); */
-
-/*   /\* Update each group locally with new root information. *\/ */
-/*   for (int i = 0; i < group_count; i++) { */
-
-/*     size_t group_id = global_group_id[i]; */
-/*     size_t offset = fof_find(global_group_index[i], global_group_index); */
-/*     size_t new_root = global_group_id[offset]; */
-
-/*     /\* If the group is local update its root and size. *\/ */
-/*     if (is_local(group_id, nr_gparts) && new_root != group_id) { */
-/*       group_index[group_id - node_offset] = new_root; */
-
-/*       group_mass[group_id - node_offset] -= global_group_mass[i]; */
-/*       group_CoM[group_id - node_offset].x -= global_group_CoM[i].x; */
-/*       group_CoM[group_id - node_offset].y -= global_group_CoM[i].y; */
-/*       group_CoM[group_id - node_offset].z -= global_group_CoM[i].z; */
-/*       group_size[group_id - node_offset] -= orig_global_group_size[i]; */
-
-/*       /\* Store local root if the group is big enough. *\/ */
-/*       if (global_group_size[offset] >= min_group_size) */
-/*         (*local_roots)[local_root_count++] = group_id - node_offset; */
-/*     } */
-
-/*     /\* If the group linked to a local root update its size. *\/ */
-/*     if (is_local(new_root, nr_gparts) && new_root != group_id) { */
-
-/*       /\* Calculate the CoM of each distinct group. *\/ */
-/*       double CoM_x_old = group_CoM[new_root - node_offset].x / */
-/*                          group_mass[new_root - node_offset]; */
-/*       double CoM_y_old = group_CoM[new_root - node_offset].y / */
-/*                          group_mass[new_root - node_offset]; */
-/*       double CoM_z_old = group_CoM[new_root - node_offset].z / */
-/*                          group_mass[new_root - node_offset]; */
-/*       double CoM_x = global_group_CoM[i].x / global_group_mass[i]; */
-/*       double CoM_y = global_group_CoM[i].y / global_group_mass[i]; */
-/*       double CoM_z = global_group_CoM[i].z / global_group_mass[i]; */
-
-/*       /\* Periodically wrap the CoM of the group being linked across the domain */
-/*        * based upon the location of the other CoM location. *\/ */
-/*       if (CoM_x_old > 0.5 * dim[0] && CoM_x < 0.5 * dim[0]) */
-/*         CoM_x += dim[0]; */
-/*       else if (CoM_x_old <= 0.5 * dim[0] && CoM_x > 0.5 * dim[0]) */
-/*         CoM_x -= dim[0]; */
-
-/*       if (CoM_y_old > 0.5 * dim[1] && CoM_y < 0.5 * dim[1]) */
-/*         CoM_y += dim[1]; */
-/*       else if (CoM_y_old <= 0.5 * dim[1] && CoM_y > 0.5 * dim[1]) */
-/*         CoM_y -= dim[1]; */
-
-/*       if (CoM_z_old > 0.5 * dim[2] && CoM_z < 0.5 * dim[2]) */
-/*         CoM_z += dim[2]; */
-/*       else if (CoM_z_old <= 0.5 * dim[2] && CoM_z > 0.5 * dim[2]) */
-/*         CoM_z -= dim[2]; */
-
-/*       /\* Update the CoM. *\/ */
-/*       group_CoM[new_root - node_offset].x += (CoM_x * global_group_mass[i]); */
-/*       group_CoM[new_root - node_offset].y += (CoM_y * global_group_mass[i]); */
-/*       group_CoM[new_root - node_offset].z += (CoM_z * global_group_mass[i]); */
-
-/*       /\* Use group sizes before Union-Find *\/ */
-/*       group_size[new_root - node_offset] += orig_global_group_size[i]; */
-/*       group_mass[new_root - node_offset] += global_group_mass[i]; */
-/*     } */
-/*   } */
-
-/*   message("Updating groups locally took: %.3f %s.", */
-/*           clocks_from_ticks(getticks() - tic), clocks_getunit()); */
-
-/*   /\* Clean up memory. *\/ */
-/*   free(global_group_links); */
-/*   free(global_group_index); */
-/*   free(global_group_size); */
-/*   free(global_group_mass); */
-/*   free(global_group_id); */
-/*   free(orig_global_group_size); */
 
   message("Rank %d finished linking local roots to foreign roots.",
           engine_rank);
