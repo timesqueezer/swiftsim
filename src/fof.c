@@ -1203,6 +1203,11 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
 
   */
 
+  /* Keep a copy of original group indexes */
+  size_t *group_index_init = malloc(sizeof(size_t)*nr_gparts);
+  for(size_t i=0; i<nr_gparts; i+=1)
+    group_index_init[i] = group_index[i];
+
   /* Make array of local links then sort by remote group index */
   struct fof_mpi_links *links_local = malloc(group_link_count*sizeof(struct fof_mpi_links));
   for(int i=0;i<group_link_count;i+=1)
@@ -1383,17 +1388,17 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
       error("Failed to create MPI type for fof_mpi_sizes.");
     }
 
-  /* Count local groups which have their global root on another node */
+  /* Count local groups which have changed root */
   size_t nsend_total = 0;
   for(size_t i=0;i<nr_gparts; i+=1)
-    if(group_index[i] < node_offset)
+    if(group_index[i] != group_index_init[i])
       nsend_total += 1;
 
   /* Store index and count for each of these */
   struct fof_mpi_sizes *fof_sizes_local = malloc(nsend_total*sizeof(struct fof_mpi_sizes));
   nsend_total = 0;
   for(size_t i=0;i<nr_gparts; i+=1)
-    if(group_index[i] < node_offset)
+    if(group_index[i] != group_index_init[i])
       {
         fof_sizes_local[nsend_total].group_i = i + node_offset;
         fof_sizes_local[nsend_total].group_j = group_index[i];
@@ -1461,21 +1466,25 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   for(size_t i=0; i<nsend_total; i+=1)
     group_size[fof_sizes_local[i].group_i-node_offset] = fof_sizes_local[i].size;
 
-  /* Count local roots above minimum group size */
+  /* Count local roots above minimum group size where global root is on another node */
   local_root_count = 0;
   for(size_t i=0; i<nr_gparts; i+=1)
-    if(((group_index[i]==i+node_offset) || (group_index[i] < node_offset)) && (group_size[i] >= min_group_size))
+    if((!is_local(group_index[i], nr_gparts)) && (group_size[i] >= min_group_size))
       local_root_count += 1;
 
   /* Store indexes of local roots */
   (*local_roots) = malloc(sizeof(size_t)*local_root_count);
   local_root_count = 0;
   for(size_t i=0; i<nr_gparts; i+=1)
-    if(((group_index[i]==i+node_offset) || (group_index[i] < node_offset)) && (group_size[i] >= min_group_size))
+    if((!is_local(group_index[i], nr_gparts)) && (group_size[i] >= min_group_size))
       {
         (*local_roots)[local_root_count] = i;
         local_root_count += 1;
       }
+
+  /* Zero group size for things which are not global roots */
+  for(size_t i=0; i<nr_gparts; i+=1)
+    if(group_index[i] != node_offset+i)group_size[i] = 0;
 
   /* Free memory etc */
   free(fof_sizes_local);
@@ -1486,6 +1495,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   free(recvoffset);
   free(first_on_node);
   free(num_on_node);
+  free(group_index_init);
   MPI_Type_free(&fof_mpi_links_type);
 
   /* Clean up memory. */
