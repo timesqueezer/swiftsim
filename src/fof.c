@@ -1538,23 +1538,9 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
     error(
         "Error while allocating memory for the displacement in memory for the "
         "global group link list");
-
-  /* Make group sizes of duplicates 0, so they don't contribute twice.  */
-  for (int i = 0; i < global_group_list_size; i++) {
-    int found = 0;
-    for(int j = 0; j<i; j++) {
-      if(global_group_id[j] == global_group_id[i] && i != j) {
-        found = 1;
-      }
-    }
-
-    if(!found) orig_global_group_size[i] = global_group_size[i];
-    else {
-      orig_global_group_size[i] = 0;
-      global_group_mass[i] = 0;
-    }
-
-  }
+  
+  for (int i = 0; i < global_group_list_size; i++)
+    orig_global_group_size[i] = global_group_size[i];
 
   /* Update each group locally with new root information. */
   for (int i = 0; i < global_group_list_size; i++) {
