@@ -1414,7 +1414,7 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   for(int i=0; i<e->nr_nodes; i+=1)
     sendcount[i] = 0;
   dest = 0;
-  for(int i=0;i<nsend_total;i+=1)
+  for(size_t i=0;i<nsend_total;i+=1)
     {
       while((fof_sizes_local[i].group_j >= first_on_node[dest] + num_on_node[dest]) || (num_on_node[dest]==0))
         dest += 1;
