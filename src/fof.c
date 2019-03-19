@@ -1208,11 +1208,11 @@ size_t fof_search_foreign_cells(struct space *s, size_t **local_roots) {
   struct fof_mpi_links *links_local = malloc(group_link_count*sizeof(struct fof_mpi_links));
   for(int i=0;i<group_link_count;i+=1)
     {
-      links_local[i].group_i = group_links[i].group_i; /* Index of local fragment */
-      links_local[i].group_j = group_links[i].group_j; /* Index of remote fragment */
+      links_local[i].group_i = s->fof_data.group_links[i].group_i; /* Index of local fragment */
+      links_local[i].group_j = s->fof_data.group_links[i].group_j; /* Index of remote fragment */
       links_local[i].group_index_min = 0; /* Will contain group_index_min value to send */
     }
-  free(group_links);
+  free(s->fof_data.group_links);
   qsort(links_local, group_link_count, sizeof(struct fof_mpi_links), 
         compare_fof_mpi_links_group_j);
 
