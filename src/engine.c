@@ -2882,7 +2882,7 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
   if(file_comms == NULL) error("Unable to open MPI log file.");
   fprintf(file_comms, "# Key: type=22: recv type=21: send\n");
   fprintf(file_comms, "# Key: subtype=7: tend subtype=8: xv subtype=9: rho subtype=10: gpart\n");
-  fprintf(file_comms, "# type subtype rank_mine rank_other tag count datatype\n");
+  fprintf(file_comms, "# type subtype rank_mine rank_other tag count datatype ssend\n");
 
   /* Now, launch the calculation */
   TIMER_TIC;
@@ -2954,7 +2954,7 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
   if(file_comms == NULL) error("Unable to open MPI log file.");
   fprintf(file_comms, "# Key: type=22: recv type=21: send\n");
   fprintf(file_comms, "# Key: subtype=7: tend subtype=8: xv subtype=9: rho subtype=10: gpart\n");
-  fprintf(file_comms, "# type subtype rank_mine rank_other tag count datatype\n");
+  fprintf(file_comms, "# type subtype rank_mine rank_other tag count datatype ssend\n");
 
   /* Run the 0th time-step */
   TIMER_TIC2;

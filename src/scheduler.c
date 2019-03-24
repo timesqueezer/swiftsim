@@ -1950,7 +1950,7 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
 	    s->mpi_message_limit;
 	  MPI_Type_size(MPI_BYTE, &size);
 	  fprintf(file_comms, "%d %d %d %d %lld %zd %d %d\n",
-		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->type, t->subtype, engine_rank, t->cj->nodeID, t->flags,
 		  t->ci->mpi.pcell_size * sizeof(struct pcell_step), size, use_ssend);
 	  lock_unlock(&sp->lock);
 
@@ -1973,7 +1973,7 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
 	    s->mpi_message_limit;
 	  MPI_Type_size(part_mpi_type, &size);
 	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
-		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->type, t->subtype, engine_rank, t->cj->nodeID, t->flags,
 		  t->ci->hydro.count, size, use_ssend);
 	  lock_unlock(&sp->lock);
 
@@ -1994,7 +1994,7 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
 	    s->mpi_message_limit;
 	  MPI_Type_size(gpart_mpi_type, &size);
 	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
-		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->type, t->subtype, engine_rank, t->cj->nodeID, t->flags,
 		  t->ci->grav.count, size, use_ssend);
 	  lock_unlock(&sp->lock);
 
@@ -2016,7 +2016,7 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
 	    s->mpi_message_limit;
 	  MPI_Type_size(spart_mpi_type, &size);
 	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
-		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->type, t->subtype, engine_rank, t->cj->nodeID, t->flags,
 		  t->ci->stars.count, size, use_ssend);
 	  lock_unlock(&sp->lock);
 
@@ -2034,7 +2034,7 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
 	  const int use_ssend = 0;
 	  MPI_Type_size(multipole_mpi_type, &size);
 	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
-		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->type, t->subtype, engine_rank, t->cj->nodeID, t->flags,
 		  t->ci->mpi.pcell_size, size, use_ssend);
 	  lock_unlock(&sp->lock);
 
