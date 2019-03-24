@@ -54,6 +54,8 @@
 #include "timers.h"
 #include "version.h"
 
+extern FILE* file_comms;
+
 /**
  * @brief Re-set the list of active tasks.
  */
@@ -1802,6 +1804,7 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
   else {
 #ifdef WITH_MPI
     int err = MPI_SUCCESS;
+    struct space *sp = s->space;
 #endif
 
     /* Find the previous owner for each task type, and do
@@ -1847,26 +1850,71 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
                           t->ci->mpi.pcell_size * sizeof(struct pcell_step),
                           MPI_BYTE, t->ci->nodeID, t->flags,
                           subtaskMPI_comms[t->subtype], &t->req);
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  MPI_Type_size(MPI_BYTE, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %zd %d 0\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->mpi.pcell_size * sizeof(struct pcell_step), size);
+	  lock_unlock(&sp->lock);
+
         } else if (t->subtype == task_subtype_xv ||
                    t->subtype == task_subtype_rho ||
                    t->subtype == task_subtype_gradient) {
           err = MPI_Irecv(t->ci->hydro.parts, t->ci->hydro.count, part_mpi_type,
                           t->ci->nodeID, t->flags, subtaskMPI_comms[t->subtype],
                           &t->req);
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  MPI_Type_size(part_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d 0\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->hydro.count, size);
+	  lock_unlock(&sp->lock);
+
         } else if (t->subtype == task_subtype_gpart) {
           err = MPI_Irecv(t->ci->grav.parts, t->ci->grav.count, gpart_mpi_type,
                           t->ci->nodeID, t->flags, subtaskMPI_comms[t->subtype],
                           &t->req);
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  MPI_Type_size(gpart_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d 0\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->grav.count, size);
+	  lock_unlock(&sp->lock);
+
         } else if (t->subtype == task_subtype_spart) {
           err = MPI_Irecv(t->ci->stars.parts, t->ci->stars.count,
                           spart_mpi_type, t->ci->nodeID, t->flags,
                           subtaskMPI_comms[t->subtype], &t->req);
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  MPI_Type_size(spart_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d 0\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->stars.count, size);
+	  lock_unlock(&sp->lock);
+
         } else if (t->subtype == task_subtype_multipole) {
           t->buff = (struct gravity_tensors *)malloc(
               sizeof(struct gravity_tensors) * t->ci->mpi.pcell_size);
           err = MPI_Irecv(t->buff, t->ci->mpi.pcell_size, multipole_mpi_type,
                           t->ci->nodeID, t->flags, subtaskMPI_comms[t->subtype],
                           &t->req);
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  MPI_Type_size(multipole_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d 0\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->mpi.pcell_size, size);
+	  lock_unlock(&sp->lock);
+
         } else {
           error("Unknown communication sub-type");
         }
@@ -1895,6 +1943,17 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
                              t->ci->mpi.pcell_size * sizeof(struct pcell_step),
                              MPI_BYTE, t->cj->nodeID, t->flags,
                              subtaskMPI_comms[t->subtype], &t->req);
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  const int use_ssend = (t->ci->mpi.pcell_size * sizeof(struct pcell_step)) <=
+	    s->mpi_message_limit;
+	  MPI_Type_size(MPI_BYTE, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %zd %d %d\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->mpi.pcell_size * sizeof(struct pcell_step), size, use_ssend);
+	  lock_unlock(&sp->lock);
+
         } else if (t->subtype == task_subtype_xv ||
                    t->subtype == task_subtype_rho ||
                    t->subtype == task_subtype_gradient) {
@@ -1906,6 +1965,19 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
             err = MPI_Issend(t->ci->hydro.parts, t->ci->hydro.count,
                              part_mpi_type, t->cj->nodeID, t->flags,
                              subtaskMPI_comms[t->subtype], &t->req);
+
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  const int use_ssend = (t->ci->hydro.count * sizeof(struct part)) <=
+	    s->mpi_message_limit;
+	  MPI_Type_size(part_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->hydro.count, size, use_ssend);
+	  lock_unlock(&sp->lock);
+
+
         } else if (t->subtype == task_subtype_gpart) {
           if ((t->ci->grav.count * sizeof(struct gpart)) > s->mpi_message_limit)
             err = MPI_Isend(t->ci->grav.parts, t->ci->grav.count,
@@ -1915,6 +1987,17 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
             err = MPI_Issend(t->ci->grav.parts, t->ci->grav.count,
                              gpart_mpi_type, t->cj->nodeID, t->flags,
                              subtaskMPI_comms[t->subtype], &t->req);
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  const int use_ssend = (t->ci->grav.count * sizeof(struct gpart)) <=
+	    s->mpi_message_limit;
+	  MPI_Type_size(gpart_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->grav.count, size, use_ssend);
+	  lock_unlock(&sp->lock);
+
         } else if (t->subtype == task_subtype_spart) {
           if ((t->ci->stars.count * sizeof(struct spart)) >
               s->mpi_message_limit)
@@ -1925,6 +2008,18 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
             err = MPI_Issend(t->ci->stars.parts, t->ci->stars.count,
                              spart_mpi_type, t->cj->nodeID, t->flags,
                              subtaskMPI_comms[t->subtype], &t->req);
+
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  const int use_ssend = (t->ci->stars.count * sizeof(struct spart)) <=
+	    s->mpi_message_limit;
+	  MPI_Type_size(spart_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->stars.count, size, use_ssend);
+	  lock_unlock(&sp->lock);
+
         } else if (t->subtype == task_subtype_multipole) {
           t->buff = (struct gravity_tensors *)malloc(
               sizeof(struct gravity_tensors) * t->ci->mpi.pcell_size);
@@ -1932,6 +2027,17 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
           err = MPI_Isend(t->buff, t->ci->mpi.pcell_size, multipole_mpi_type,
                           t->cj->nodeID, t->flags, subtaskMPI_comms[t->subtype],
                           &t->req);
+
+
+	  lock_lock(&sp->lock);
+	  int size;
+	  const int use_ssend = 0;
+	  MPI_Type_size(multipole_mpi_type, &size);
+	  fprintf(file_comms, "%d %d %d %d %lld %d %d %d\n",
+		  t->type, t->subtype, engine_rank, t->ci->nodeID, t->flags,
+		  t->ci->mpi.pcell_size, size, use_ssend);
+	  lock_unlock(&sp->lock);
+
         } else {
           error("Unknown communication sub-type");
         }

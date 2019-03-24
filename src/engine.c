@@ -121,6 +121,8 @@ const char *engine_policy_names[] = {"none",
 /** The rank of the engine as a global variable (for messages). */
 int engine_rank;
 
+FILE* file_comms;
+
 /**
  * @brief Data collected from the cells at the end of a time-step
  */
@@ -2873,10 +2875,21 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
   logger_ensure_size(e->logger, e->total_nr_parts, e->total_nr_gparts, 0);
 #endif
 
+  char filename[200];
+  sprintf(filename, "comms_init_rank_%d.dat", engine_rank);
+  message("%s", filename);
+  file_comms = fopen(filename, "w");
+  if(file_comms == NULL) error("Unable to open MPI log file.");
+  fprintf(file_comms, "# Key: type=22: recv type=21: send\n");
+  fprintf(file_comms, "# Key: subtype=7: tend subtype=8: xv subtype=9: rho subtype=10: gpart\n");
+  fprintf(file_comms, "# type subtype rank_mine rank_other tag count datatype\n");
+
   /* Now, launch the calculation */
   TIMER_TIC;
   engine_launch(e);
   TIMER_TOC(timer_runners);
+
+  fclose(file_comms);
 
   /* Apply some conversions (e.g. internal energy -> entropy) */
   if (!flag_entropy_ICs) {
@@ -2935,10 +2948,20 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
   space_write_cell_hierarchy(e->s);
   if (e->nodeID == 0) scheduler_write_task_level(&e->sched);
 
+  sprintf(filename, "comms_step0_rank_%d.dat", engine_rank);
+  message("%s", filename);
+  file_comms = fopen(filename, "w");
+  if(file_comms == NULL) error("Unable to open MPI log file.");
+  fprintf(file_comms, "# Key: type=22: recv type=21: send\n");
+  fprintf(file_comms, "# Key: subtype=7: tend subtype=8: xv subtype=9: rho subtype=10: gpart\n");
+  fprintf(file_comms, "# type subtype rank_mine rank_other tag count datatype\n");
+
   /* Run the 0th time-step */
   TIMER_TIC2;
   engine_launch(e);
   TIMER_TOC2(timer_runners);
+
+  fclose(file_comms);
 
 #ifdef SWIFT_GRAVITY_FORCE_CHECKS
   /* Check the accuracy of the gravity calculation */
