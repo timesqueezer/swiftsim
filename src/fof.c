@@ -42,6 +42,9 @@
 #ifdef WITH_MPI
 MPI_Datatype fof_mpi_type;
 MPI_Datatype group_length_mpi_type;
+MPI_Datatype fof_mpi_links_type;
+MPI_Datatype fof_mpi_sizes_type;
+MPI_Datatype fof_final_index_type;
 #endif
 size_t node_offset;
 
@@ -151,6 +154,20 @@ void fof_init(struct space *s) {
                           MPI_BYTE, &group_length_mpi_type) != MPI_SUCCESS ||
       MPI_Type_commit(&group_length_mpi_type) != MPI_SUCCESS) {
     error("Failed to create MPI type for group_length.");
+  }
+  if (MPI_Type_contiguous(sizeof(struct fof_mpi_links) / sizeof(unsigned char),
+                          MPI_BYTE, &fof_mpi_links_type) != MPI_SUCCESS ||
+      MPI_Type_commit(&fof_mpi_links_type) != MPI_SUCCESS) {
+    error("Failed to create MPI type for fof_mpi_links.");
+  }
+  if (MPI_Type_contiguous(sizeof(struct fof_mpi_sizes) / sizeof(unsigned char),
+                          MPI_BYTE, &fof_mpi_sizes_type) != MPI_SUCCESS ||
+      MPI_Type_commit(&fof_mpi_sizes_type) != MPI_SUCCESS){
+    error("Failed to create MPI type for fof_mpi_sizes.");
+  }
+  if (MPI_Type_contiguous(sizeof(struct fof_final_index), MPI_BYTE, &fof_final_index_type) != MPI_SUCCESS ||
+      MPI_Type_commit(&fof_final_index_type) != MPI_SUCCESS) {
+    error("Failed to create MPI type for fof_final_index.");
   }
 #endif
 
@@ -1297,15 +1314,6 @@ void fof_search_foreign_cells(struct space *s) {
   for(int i=1;i<e->nr_nodes;i+=1)
     recvoffset[i] = recvoffset[i-1] + recvcount[i-1];
 
-  /* Set up MPI type to exchange link info */
-  MPI_Datatype fof_mpi_links_type;
-  if (MPI_Type_contiguous(sizeof(struct fof_mpi_links) / sizeof(unsigned char),
-                          MPI_BYTE, &fof_mpi_links_type) != MPI_SUCCESS ||
-      MPI_Type_commit(&fof_mpi_links_type) != MPI_SUCCESS)
-    {
-      error("Failed to create MPI type for fof_mpi_links.");
-    }
-
   /* Allocate receive buffer for remote links */
   int remote_link_count = 0;
   for(int i=0;i<e->nr_nodes;i+=1)
@@ -1398,7 +1406,6 @@ void fof_search_foreign_cells(struct space *s) {
     } while(num_updated_tot > 0);
 
   /* Tidy up */
-  MPI_Type_free(&fof_mpi_links_type);
   free(links_local);
   free(links_remote);
 
@@ -1418,15 +1425,6 @@ void fof_search_foreign_cells(struct space *s) {
     so we know which of these groups are below the minimum group
     size.
   */
-
-  /* Set up MPI type to exchange group sizes etc */
-  MPI_Datatype fof_mpi_sizes_type;
-  if (MPI_Type_contiguous(sizeof(struct fof_mpi_sizes) / sizeof(unsigned char),
-                          MPI_BYTE, &fof_mpi_sizes_type) != MPI_SUCCESS ||
-      MPI_Type_commit(&fof_mpi_sizes_type) != MPI_SUCCESS)
-    {
-      error("Failed to create MPI type for fof_mpi_sizes.");
-    }
 
   /* Count local groups which have changed root */
   size_t nsend_total = 0;
@@ -1520,7 +1518,6 @@ void fof_search_foreign_cells(struct space *s) {
   free(first_on_node);
   free(num_on_node);
   free(group_index_init);
-  MPI_Type_free(&fof_mpi_links_type);
 
   /* Clean up memory. */
   free(displ);
@@ -1794,11 +1791,6 @@ void fof_search_tree(struct space *s) {
   
   /* Define type for sending fof_final_index struct */
   
-  MPI_Datatype fof_final_index_type;
-  if (MPI_Type_contiguous(sizeof(struct fof_final_index), MPI_BYTE, &fof_final_index_type) != MPI_SUCCESS ||
-      MPI_Type_commit(&fof_final_index_type) != MPI_SUCCESS) {
-    error("Failed to create MPI type for fof_final_index.");
-  }
 
   /* 
      Identify local roots with global root on another node and large enough group_size.
@@ -1897,7 +1889,6 @@ void fof_search_tree(struct space *s) {
     gparts[fof_index_send[i].local_root-node_offset].group_id = fof_index_send[i].global_root;
   }
 
-  MPI_Type_free(&fof_final_index_type);
   free(sendcount);
   free(recvcount);
   free(sendoffset);
