@@ -477,6 +477,12 @@ struct cell {
     /*! Pointer to the #spart data. */
     struct spart *parts;
 
+    /*! Dependency implicit task for the ghost  (in->ghost->out)*/
+    struct task *ghost_in;
+
+    /*! Dependency implicit task for the ghost  (in->ghost->out)*/
+    struct task *ghost_out;
+
     /*! The star ghost task itself */
     struct task *ghost;
 

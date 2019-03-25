@@ -3756,6 +3756,8 @@ int cell_unskip_stars_tasks(struct cell *c, struct scheduler *s) {
   if (c->nodeID == nodeID && cell_is_active_stars(c, e)) {
 
     if (c->stars.ghost != NULL) scheduler_activate(s, c->stars.ghost);
+    if (c->stars.ghost_in != NULL) scheduler_activate(s, c->stars.ghost_in);
+    if (c->stars.ghost_out != NULL) scheduler_activate(s, c->stars.ghost_out);
     if (c->stars.stars_in != NULL) scheduler_activate(s, c->stars.stars_in);
     if (c->stars.stars_out != NULL) scheduler_activate(s, c->stars.stars_out);
     if (c->kick1 != NULL) scheduler_activate(s, c->kick1);
