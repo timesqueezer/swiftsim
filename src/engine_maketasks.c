@@ -674,8 +674,8 @@ void engine_make_hierarchical_tasks_gravity(struct engine *e, struct cell *c) {
 /**
  * @brief Recursively add non-implicit ghost tasks to a cell hierarchy.
  */
-void engine_add_ghosts(struct engine *e, struct cell *c, struct task *ghost_in,
-                       struct task *ghost_out) {
+void engine_add_hydro_ghosts(struct engine *e, struct cell *c,
+                             struct task *ghost_in, struct task *ghost_out) {
 
   /* Abort as there are no hydro particles here? */
   if (c->hydro.count_total == 0) return;
@@ -694,7 +694,7 @@ void engine_add_ghosts(struct engine *e, struct cell *c, struct task *ghost_in,
     /* Keep recursing */
     for (int k = 0; k < 8; k++)
       if (c->progeny[k] != NULL)
-        engine_add_ghosts(e, c->progeny[k], ghost_in, ghost_out);
+        engine_add_hydro_ghosts(e, c->progeny[k], ghost_in, ghost_out);
   }
 }
 
@@ -748,7 +748,7 @@ void engine_make_hierarchical_tasks_hydro(struct engine *e, struct cell *c) {
       c->hydro.ghost_out =
           scheduler_addtask(s, task_type_ghost_out, task_subtype_none, 0,
                             /* implicit = */ 1, c, NULL);
-      engine_add_ghosts(e, c, c->hydro.ghost_in, c->hydro.ghost_out);
+      engine_add_hydro_ghosts(e, c, c->hydro.ghost_in, c->hydro.ghost_out);
 
       /* Generate the extra ghost task. */
 #ifdef EXTRA_HYDRO_LOOP
