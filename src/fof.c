@@ -1787,14 +1787,6 @@ void fof_search_tree(struct space *s) {
      Will do that by sending the group_index of these lcoal roots to the node
      where their global root is stored and receiving back the new group_id
      associated with that particle.
-  */
-  
-  /* Define type for sending fof_final_index struct */
-  
-
-  /* 
-     Identify local roots with global root on another node and large enough group_size.
-     Store index of the local and global roots in these cases.
   
      NOTE: if group_size only contains the total FoF mass for global roots,
      then we have to communicate ALL fragments where the global root is not
@@ -1827,12 +1819,12 @@ void fof_search_tree(struct space *s) {
                 MPI_COMM_WORLD);
   size_t *first_on_node = malloc(nr_nodes*sizeof(size_t));
   first_on_node[0] = 0;
-  for(size_t i=1;i<nr_nodes;i+=1)
+  for(int i=1;i<nr_nodes;i+=1)
     first_on_node[i] = first_on_node[i-1] + num_on_node[i-1];
 
   /* Determine how many entries go to each node */
   int *sendcount = malloc(nr_nodes*sizeof(int));
-  for(size_t i=0; i<nr_nodes; i+=1)
+  for(int i=0; i<nr_nodes; i+=1)
     sendcount[i] = 0;
   int dest = 0;
   for(size_t i=0;i<nsend;i+=1) {
