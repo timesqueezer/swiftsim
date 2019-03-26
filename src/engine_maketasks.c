@@ -713,7 +713,7 @@ void engine_add_stars_ghosts(struct engine *e, struct cell *c,
     /* Add the ghost task and its dependencies */
     struct scheduler *s = &e->sched;
     c->stars.ghost =
-        scheduler_addtask(s, task_type_ghost, task_subtype_none, 0, 0, c, NULL);
+        scheduler_addtask(s, task_type_stars_ghost, task_subtype_none, 0, 0, c, NULL);
     scheduler_addunlock(s, ghost_in, c->stars.ghost);
     scheduler_addunlock(s, c->stars.ghost, ghost_out);
 
