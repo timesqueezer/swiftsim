@@ -1279,10 +1279,10 @@ void fof_search_foreign_cells(struct space *s) {
     
   */
 
-  /* Keep a copy of original group indexes */
-  size_t *group_index_init = malloc(sizeof(size_t)*nr_gparts);
+  /* Need to record which group indexes are changed by this process */
+  char *group_index_changed = malloc(sizeof(char)*nr_gparts);
   for(size_t i=0; i<nr_gparts; i+=1)
-    group_index_init[i] = group_index[i];
+    group_index_changed[i] = 0;
 
   /* Make array of local links then sort by remote group index */
   struct fof_mpi_links *links_local = malloc(group_link_count*sizeof(struct fof_mpi_links));
@@ -1382,6 +1382,7 @@ void fof_search_foreign_cells(struct space *s) {
           if(links_remote[i].group_index_min < group_index[links_remote[i].group_j-node_offset])
             {
               group_index[links_remote[i].group_j-node_offset] = links_remote[i].group_index_min;
+              group_index_changed[links_remote[i].group_j-node_offset] = 1;
               num_updated += 1;
             }
         }
@@ -1414,6 +1415,7 @@ void fof_search_foreign_cells(struct space *s) {
           if(links_local[i].group_index_min < group_index[links_local[i].group_i-node_offset])
             {
               group_index[links_local[i].group_i-node_offset] = links_local[i].group_index_min;
+              group_index_changed[links_local[i].group_i-node_offset] = 1;
               num_updated += 1;
             }
         }
@@ -1447,20 +1449,21 @@ void fof_search_foreign_cells(struct space *s) {
   /* Count local groups which have changed root */
   size_t nsend_total = 0;
   for(size_t i=0;i<nr_gparts; i+=1)
-    if(group_index[i] != group_index_init[i])
+    if(group_index_changed[i])
       nsend_total += 1;
 
   /* Store index and count for each of these */
   struct fof_mpi_sizes *fof_sizes_local = malloc(nsend_total*sizeof(struct fof_mpi_sizes));
   nsend_total = 0;
   for(size_t i=0;i<nr_gparts; i+=1)
-    if(group_index[i] != group_index_init[i])
+    if(group_index_changed[i])
       {
         fof_sizes_local[nsend_total].group_i = i + node_offset;
         fof_sizes_local[nsend_total].group_j = group_index[i];
         fof_sizes_local[nsend_total].size    = group_size[i];
         nsend_total += 1;
       }
+  free(group_index_changed);
 
   /* Sort by remote group index */
   qsort(fof_sizes_local, nsend_total, sizeof(struct fof_mpi_sizes), 
@@ -1535,7 +1538,6 @@ void fof_search_foreign_cells(struct space *s) {
   free(recvoffset);
   free(first_on_node);
   free(num_on_node);
-  free(group_index_init);
 
   /* Clean up memory. */
   free(displ);
