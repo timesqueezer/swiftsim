@@ -51,7 +51,6 @@ MPI_Datatype fof_final_mass_type;
 #endif
 size_t node_offset;
 
-#define UNION_BY_SIZE_OVER_MPI (1)
 #define FOF_COMPRESS_PATHS_MIN_LENGTH (2)
 
 /* Initialises parameters for the FOF search. */
@@ -169,12 +168,6 @@ void fof_init(struct space *s) {
   }
 #endif
 
-#ifdef UNION_BY_SIZE_OVER_MPI
-  message(
-      "Performing FOF over MPI using union by size and union by rank locally.");
-#else
-  message("Performing FOF using union by rank.");
-#endif
 }
 
 /*
@@ -766,7 +759,6 @@ void fof_search_pair_cells_foreign(struct space *s, struct cell *ci,
   const double dim[3] = {s->dim[0], s->dim[1], s->dim[2]};
   const double l_x2 = s->fof_data.l_x2;
   size_t *group_index = s->fof_data.group_index;
-  size_t *group_size = s->fof_data.group_size;
 
   /* Make a list of particle offsets into the global gparts array. */
   size_t *const offset_i = group_index + (ptrdiff_t)(gparts_i - s->gparts);
@@ -860,11 +852,7 @@ void fof_search_pair_cells_foreign(struct space *s, struct cell *ci,
 
             /* Store the particle group properties for communication. */
             (*group_links)[*link_count].group_i = root_i;
-            (*group_links)[*link_count].group_i_size =
-                group_size[root_i - node_offset];
-
             (*group_links)[*link_count].group_j = pj->group_id;
-            (*group_links)[*link_count].group_j_size = pj->group_size;
 
             (*link_count)++;
           }
@@ -1173,17 +1161,10 @@ void fof_find_foreign_links_mapper(void *map_data, int num_elements,
       }
 
       if(!found) {
-
         (*group_links)[*group_link_count].group_i =
           local_group_links[i].group_i;
-        (*group_links)[*group_link_count].group_i_size =
-          local_group_links[i].group_i_size;
-
         (*group_links)[*group_link_count].group_j =
           local_group_links[i].group_j;
-        (*group_links)[*group_link_count].group_j_size =
-          local_group_links[i].group_j_size;
-
         (*group_link_count) = (*group_link_count) + 1;
       }
     }
@@ -1319,7 +1300,6 @@ void fof_search_foreign_cells(struct space *s) {
         const size_t root =
             fof_find_global(offset[k] - node_offset, group_index, nr_gparts);
         gparts[k].group_id = root;
-        gparts[k].group_size = group_size[root - node_offset];
       }
     }
   }

@@ -36,14 +36,8 @@ struct fof_mpi {
   /* The local particle's root ID.*/
   size_t group_i;
 
-  /* The local group's size.*/
-  size_t group_i_size;
-
   /* The foreign particle's root ID.*/
   size_t group_j;
-
-  /* The local group's size.*/
-  size_t group_j_size;
 
 } SWIFT_STRUCT_ALIGN;
 
