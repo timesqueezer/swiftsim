@@ -50,8 +50,8 @@ include_HEADERS = space.h runner.h queue.h task.h lock.h cell.h part.h const.h \
     chemistry.h chemistry_io.h chemistry_struct.h cosmology.h restart.h space_getsid.h utilities.h \
     mesh_gravity.h cbrt.h exp10.h velociraptor_interface.h swift_velociraptor_part.h outputlist.h \
     logger_io.h tracers_io.h tracers.h tracers_struct.h star_formation_io.h fof.h \
-    star_formation_struct.h star_formation.h velociraptor_struct.h velociraptor_io.h \
-    random.h c_hashmap/hashmap.h
+    star_formation_struct.h star_formation.h star_formation_iact.h \
+    velociraptor_struct.h velociraptor_io.h random.h memuse.h c_hashmap/hashmap.h
 
 # source files for EAGLE cooling
 EAGLE_COOLING_SOURCES =
@@ -70,8 +70,8 @@ AM_SOURCES = space.c runner.c queue.c task.c cell.c engine.c engine_maketasks.c 
     part_type.c xmf.c gravity_properties.c gravity.c \
     collectgroup.c hydro_space.c equation_of_state.c \
     chemistry.c cosmology.c restart.c mesh_gravity.c velociraptor_interface.c \
-    outputlist.c velociraptor_dummy.c logger_io.c fof.c $(EAGLE_COOLING_SOURCES) \
-    c_hashmap/hashmap.c
+    outputlist.c velociraptor_dummy.c logger_io.c fof.c memuse.c \
+    $(EAGLE_COOLING_SOURCES) c_hashmap/hashmap.c
 
 # Include files for distribution, not installation.
 nobase_noinst_HEADERS = align.h approx_math.h atomic.h barrier.h cycle.h error.h inline.h kernel_hydro.h kernel_gravity.h \
@@ -144,9 +144,11 @@ nobase_noinst_HEADERS = align.h approx_math.h atomic.h barrier.h cycle.h error.h
                  potential/isothermal/potential.h potential/disc_patch/potential.h \
                  potential/sine_wave/potential.h \
 		 star_formation/none/star_formation.h star_formation/none/star_formation_struct.h \
-		 star_formation/none/star_formation_io.h \
+		 star_formation/none/star_formation_io.h star_formation/none/star_formation_iact.h \
 		 star_formation/EAGLE/star_formation.h star_formation/EAGLE/star_formation_struct.h \
-		 star_formation/EAGLE/star_formation_io.h \
+		 star_formation/EAGLE/star_formation_io.h star_formation/EAGLE/star_formation_iact.h \
+		 star_formation/GEAR/star_formation.h star_formation/GEAR/star_formation_struct.h \
+		 star_formation/GEAR/star_formation_io.h star_formation/GEAR/star_formation_iact.h \
 		 cooling/none/cooling.h cooling/none/cooling_struct.h \
                  cooling/none/cooling_io.h \
 		 cooling/Compton/cooling.h cooling/Compton/cooling_struct.h \

@@ -46,6 +46,7 @@
 #include "error.h"
 #include "intrinsics.h"
 #include "kernel_hydro.h"
+#include "memuse.h"
 #include "queue.h"
 #include "sort_part.h"
 #include "space.h"
@@ -67,9 +68,10 @@ static void scheduler_extend_unlocks(struct scheduler *s) {
 
   /* Allocate the new buffer. */
   const int size_unlocks_new = s->size_unlocks * 2;
-  struct task **unlocks_new =
-      (struct task **)malloc(sizeof(struct task *) * size_unlocks_new);
-  int *unlock_ind_new = (int *)malloc(sizeof(int) * size_unlocks_new);
+  struct task **unlocks_new = (struct task **)swift_malloc(
+      "unlocks", sizeof(struct task *) * size_unlocks_new);
+  int *unlock_ind_new =
+      (int *)swift_malloc("unlock_ind", sizeof(int) * size_unlocks_new);
   if (unlocks_new == NULL || unlock_ind_new == NULL)
     error("Failed to re-allocate unlocks.");
 
@@ -80,8 +82,8 @@ static void scheduler_extend_unlocks(struct scheduler *s) {
   /* Copy the buffers. */
   memcpy(unlocks_new, s->unlocks, sizeof(struct task *) * s->size_unlocks);
   memcpy(unlock_ind_new, s->unlock_ind, sizeof(int) * s->size_unlocks);
-  free(s->unlocks);
-  free(s->unlock_ind);
+  swift_free("unlocks", s->unlocks);
+  swift_free("unlock_ind", s->unlock_ind);
   s->unlocks = unlocks_new;
   s->unlock_ind = unlock_ind_new;
 
@@ -465,7 +467,7 @@ void scheduler_write_dependencies(struct scheduler *s, int verbose) {
 
   if (s->nodeID == 0) {
     /* Create file */
-    char *filename = "dependency_graph.csv";
+    const char *filename = "dependency_graph.csv";
     FILE *f = fopen(filename, "w");
     if (f == NULL) error("Error opening dependency graph file.");
 
@@ -541,6 +543,11 @@ void scheduler_write_dependencies(struct scheduler *s, int verbose) {
  */
 static void scheduler_splittask_hydro(struct task *t, struct scheduler *s) {
 
+  /* Are we considering both stars and hydro when splitting? */
+  /* Note this is not very clean as the scheduler should not really
+     access the engine... */
+  const int with_feedback = (s->space->e->policy & engine_policy_feedback);
+
   /* Iterate on this task until we're done with it. */
   int redo = 1;
   while (redo) {
@@ -548,9 +555,20 @@ static void scheduler_splittask_hydro(struct task *t, struct scheduler *s) {
     /* Reset the redo flag. */
     redo = 0;
 
+    /* Is this a non-empty self-task? */
+    const int is_self =
+        (t->type == task_type_self) && (t->ci != NULL) &&
+        ((t->ci->hydro.count > 0) || (with_feedback && t->ci->stars.count > 0));
+
+    /* Is this a non-empty pair-task? */
+    const int is_pair =
+        (t->type == task_type_pair) && (t->ci != NULL) && (t->cj != NULL) &&
+        ((t->ci->hydro.count > 0) ||
+         (with_feedback && t->ci->stars.count > 0)) &&
+        ((t->cj->hydro.count > 0) || (with_feedback && t->cj->stars.count > 0));
+
     /* Empty task? */
-    if ((t->ci == NULL) || (t->type == task_type_pair && t->cj == NULL) ||
-        t->ci->hydro.count == 0 || (t->cj != NULL && t->cj->hydro.count == 0)) {
+    if (!is_self && !is_pair) {
       t->type = task_type_none;
       t->subtype = task_subtype_none;
       t->cj = NULL;
@@ -589,24 +607,46 @@ static void scheduler_splittask_hydro(struct task *t, struct scheduler *s) {
           int first_child = 0;
           while (ci->progeny[first_child] == NULL) first_child++;
           t->ci = ci->progeny[first_child];
-          for (int k = first_child + 1; k < 8; k++)
-            if (ci->progeny[k] != NULL && ci->progeny[k]->hydro.count)
+          for (int k = first_child + 1; k < 8; k++) {
+
+            /* Do we have a non-empty progenitor? */
+            if (ci->progeny[k] != NULL &&
+                (ci->progeny[k]->hydro.count ||
+                 (with_feedback && ci->progeny[k]->stars.count))) {
+
               scheduler_splittask_hydro(
                   scheduler_addtask(s, task_type_self, t->subtype, 0, 0,
                                     ci->progeny[k], NULL),
                   s);
+            }
+          }
 
           /* Make a task for each pair of progeny */
-          for (int j = 0; j < 8; j++)
-            if (ci->progeny[j] != NULL && ci->progeny[j]->hydro.count)
-              for (int k = j + 1; k < 8; k++)
-                if (ci->progeny[k] != NULL && ci->progeny[k]->hydro.count)
+          for (int j = 0; j < 8; j++) {
+
+            /* Do we have a non-empty progenitor? */
+            if (ci->progeny[j] != NULL &&
+                (ci->progeny[j]->hydro.count ||
+                 (with_feedback && ci->progeny[j]->stars.count))) {
+
+              for (int k = j + 1; k < 8; k++) {
+
+                /* Do we have a second non-empty progenitor? */
+                if (ci->progeny[k] != NULL &&
+                    (ci->progeny[k]->hydro.count ||
+                     (with_feedback && ci->progeny[k]->stars.count))) {
+
                   scheduler_splittask_hydro(
                       scheduler_addtask(s, task_type_pair, t->subtype,
                                         sub_sid_flag[j][k], 0, ci->progeny[j],
                                         ci->progeny[k]),
                       s);
+                }
+              }
+            }
+          }
         }
+
       } /* Cell is split */
 
     } /* Self interaction */
@@ -1015,478 +1055,6 @@ static void scheduler_splittask_hydro(struct task *t, struct scheduler *s) {
 }
 
 /**
- * @brief Split a stars task if too large.
- *
- * @param t The #task
- * @param s The #scheduler we are working in.
- */
-static void scheduler_splittask_stars(struct task *t, struct scheduler *s) {
-
-  /* Iterate on this task until we're done with it. */
-  int redo = 1;
-  while (redo) {
-
-    /* Reset the redo flag. */
-    redo = 0;
-
-    /* Empty task? */
-    if ((t->ci == NULL) || (t->type == task_type_pair && t->cj == NULL) ||
-        t->ci->stars.count == 0 || (t->cj != NULL && t->cj->stars.count == 0)) {
-      t->type = task_type_none;
-      t->subtype = task_subtype_none;
-      t->cj = NULL;
-      t->skip = 1;
-      break;
-    }
-
-    /* Self-interaction? */
-    if (t->type == task_type_self) {
-
-      /* Get a handle on the cell involved. */
-      struct cell *ci = t->ci;
-
-      /* Foreign task? */
-      if (ci->nodeID != s->nodeID) {
-        t->skip = 1;
-        break;
-      }
-
-      /* Is this cell even split and the task does not violate h ? */
-      if (cell_can_split_self_stars_task(ci)) {
-
-        /* Make a sub? */
-        if (scheduler_dosub && ci->stars.count < space_subsize_self_stars) {
-
-          /* convert to a self-subtask. */
-          t->type = task_type_sub_self;
-
-          /* Otherwise, make tasks explicitly. */
-        } else {
-
-          /* Take a step back (we're going to recycle the current task)... */
-          redo = 1;
-
-          /* Add the self tasks. */
-          int first_child = 0;
-          while (ci->progeny[first_child] == NULL) first_child++;
-          t->ci = ci->progeny[first_child];
-          for (int k = first_child + 1; k < 8; k++)
-            if (ci->progeny[k] != NULL && ci->progeny[k]->stars.count)
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_self, t->subtype, 0, 0,
-                                    ci->progeny[k], NULL),
-                  s);
-
-          /* Make a task for each pair of progeny */
-          for (int j = 0; j < 8; j++)
-            if (ci->progeny[j] != NULL && ci->progeny[j]->stars.count)
-              for (int k = j + 1; k < 8; k++)
-                if (ci->progeny[k] != NULL && ci->progeny[k]->stars.count)
-                  scheduler_splittask_stars(
-                      scheduler_addtask(s, task_type_pair, t->subtype,
-                                        sub_sid_flag[j][k], 0, ci->progeny[j],
-                                        ci->progeny[k]),
-                      s);
-        }
-      } /* Cell is split */
-
-    } /* Self interaction */
-
-    /* Pair interaction? */
-    else if (t->type == task_type_pair) {
-
-      /* Get a handle on the cells involved. */
-      struct cell *ci = t->ci;
-      struct cell *cj = t->cj;
-
-      /* Foreign task? */
-      if (ci->nodeID != s->nodeID && cj->nodeID != s->nodeID) {
-        t->skip = 1;
-        break;
-      }
-
-      /* Get the sort ID, use space_getsid and not t->flags
-         to make sure we get ci and cj swapped if needed. */
-      double shift[3];
-      const int sid = space_getsid(s->space, &ci, &cj, shift);
-
-      /* Should this task be split-up? */
-      if (cell_can_split_pair_stars_task(ci) &&
-          cell_can_split_pair_stars_task(cj)) {
-
-        /* Replace by a single sub-task? */
-        if (scheduler_dosub && /* Use division to avoid integer overflow. */
-            ci->stars.count * sid_scale[sid] <
-                space_subsize_pair_stars / cj->stars.count &&
-            !sort_is_corner(sid)) {
-
-          /* Make this task a sub task. */
-          t->type = task_type_sub_pair;
-
-          /* Otherwise, split it. */
-        } else {
-
-          /* Take a step back (we're going to recycle the current task)... */
-          redo = 1;
-
-          /* For each different sorting type... */
-          switch (sid) {
-
-            case 0: /* (  1 ,  1 ,  1 ) */
-              t->ci = ci->progeny[7];
-              t->cj = cj->progeny[0];
-              t->flags = 0;
-              break;
-
-            case 1: /* (  1 ,  1 ,  0 ) */
-              t->ci = ci->progeny[6];
-              t->cj = cj->progeny[0];
-              t->flags = 1;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 1, 0,
-                                    ci->progeny[7], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 0, 0,
-                                    ci->progeny[6], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 2, 0,
-                                    ci->progeny[7], cj->progeny[0]),
-                  s);
-              break;
-
-            case 2: /* (  1 ,  1 , -1 ) */
-              t->ci = ci->progeny[6];
-              t->cj = cj->progeny[1];
-              t->flags = 2;
-              break;
-
-            case 3: /* (  1 ,  0 ,  1 ) */
-              t->ci = ci->progeny[5];
-              t->cj = cj->progeny[0];
-              t->flags = 3;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 3, 0,
-                                    ci->progeny[7], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 0, 0,
-                                    ci->progeny[5], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 6, 0,
-                                    ci->progeny[7], cj->progeny[0]),
-                  s);
-              break;
-
-            case 4: /* (  1 ,  0 ,  0 ) */
-              t->ci = ci->progeny[4];
-              t->cj = cj->progeny[0];
-              t->flags = 4;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 5, 0,
-                                    ci->progeny[5], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 7, 0,
-                                    ci->progeny[6], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 8, 0,
-                                    ci->progeny[7], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 3, 0,
-                                    ci->progeny[4], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 4, 0,
-                                    ci->progeny[5], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 6, 0,
-                                    ci->progeny[6], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 7, 0,
-                                    ci->progeny[7], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 1, 0,
-                                    ci->progeny[4], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 2, 0,
-                                    ci->progeny[5], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 4, 0,
-                                    ci->progeny[6], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 5, 0,
-                                    ci->progeny[7], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 0, 0,
-                                    ci->progeny[4], cj->progeny[3]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 1, 0,
-                                    ci->progeny[5], cj->progeny[3]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 3, 0,
-                                    ci->progeny[6], cj->progeny[3]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 4, 0,
-                                    ci->progeny[7], cj->progeny[3]),
-                  s);
-              break;
-
-            case 5: /* (  1 ,  0 , -1 ) */
-              t->ci = ci->progeny[4];
-              t->cj = cj->progeny[1];
-              t->flags = 5;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 5, 0,
-                                    ci->progeny[6], cj->progeny[3]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 2, 0,
-                                    ci->progeny[4], cj->progeny[3]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 8, 0,
-                                    ci->progeny[6], cj->progeny[1]),
-                  s);
-              break;
-
-            case 6: /* (  1 , -1 ,  1 ) */
-              t->ci = ci->progeny[5];
-              t->cj = cj->progeny[2];
-              t->flags = 6;
-              break;
-
-            case 7: /* (  1 , -1 ,  0 ) */
-              t->ci = ci->progeny[4];
-              t->cj = cj->progeny[3];
-              t->flags = 6;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 8, 0,
-                                    ci->progeny[5], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 7, 0,
-                                    ci->progeny[4], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 7, 0,
-                                    ci->progeny[5], cj->progeny[3]),
-                  s);
-              break;
-
-            case 8: /* (  1 , -1 , -1 ) */
-              t->ci = ci->progeny[4];
-              t->cj = cj->progeny[3];
-              t->flags = 8;
-              break;
-
-            case 9: /* (  0 ,  1 ,  1 ) */
-              t->ci = ci->progeny[3];
-              t->cj = cj->progeny[0];
-              t->flags = 9;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 9, 0,
-                                    ci->progeny[7], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 0, 0,
-                                    ci->progeny[3], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 8, 0,
-                                    ci->progeny[7], cj->progeny[0]),
-                  s);
-              break;
-
-            case 10: /* (  0 ,  1 ,  0 ) */
-              t->ci = ci->progeny[2];
-              t->cj = cj->progeny[0];
-              t->flags = 10;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 11, 0,
-                                    ci->progeny[3], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 7, 0,
-                                    ci->progeny[6], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 6, 0,
-                                    ci->progeny[7], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 9, 0,
-                                    ci->progeny[2], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 10, 0,
-                                    ci->progeny[3], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 8, 0,
-                                    ci->progeny[6], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 7, 0,
-                                    ci->progeny[7], cj->progeny[1]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 1, 0,
-                                    ci->progeny[2], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 2, 0,
-                                    ci->progeny[3], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 10, 0,
-                                    ci->progeny[6], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 11, 0,
-                                    ci->progeny[7], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 0, 0,
-                                    ci->progeny[2], cj->progeny[5]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 1, 0,
-                                    ci->progeny[3], cj->progeny[5]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 9, 0,
-                                    ci->progeny[6], cj->progeny[5]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 10, 0,
-                                    ci->progeny[7], cj->progeny[5]),
-                  s);
-              break;
-
-            case 11: /* (  0 ,  1 , -1 ) */
-              t->ci = ci->progeny[2];
-              t->cj = cj->progeny[1];
-              t->flags = 11;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 11, 0,
-                                    ci->progeny[6], cj->progeny[5]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 2, 0,
-                                    ci->progeny[2], cj->progeny[5]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 6, 0,
-                                    ci->progeny[6], cj->progeny[1]),
-                  s);
-              break;
-
-            case 12: /* (  0 ,  0 ,  1 ) */
-              t->ci = ci->progeny[1];
-              t->cj = cj->progeny[0];
-              t->flags = 12;
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 11, 0,
-                                    ci->progeny[3], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 5, 0,
-                                    ci->progeny[5], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 2, 0,
-                                    ci->progeny[7], cj->progeny[0]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 9, 0,
-                                    ci->progeny[1], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 12, 0,
-                                    ci->progeny[3], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 8, 0,
-                                    ci->progeny[5], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 5, 0,
-                                    ci->progeny[7], cj->progeny[2]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 3, 0,
-                                    ci->progeny[1], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 6, 0,
-                                    ci->progeny[3], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 12, 0,
-                                    ci->progeny[5], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 11, 0,
-                                    ci->progeny[7], cj->progeny[4]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 0, 0,
-                                    ci->progeny[1], cj->progeny[6]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 3, 0,
-                                    ci->progeny[3], cj->progeny[6]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 9, 0,
-                                    ci->progeny[5], cj->progeny[6]),
-                  s);
-              scheduler_splittask_stars(
-                  scheduler_addtask(s, task_type_pair, t->subtype, 12, 0,
-                                    ci->progeny[7], cj->progeny[6]),
-                  s);
-              break;
-          } /* switch(sid) */
-        }
-
-        /* Otherwise, break it up if it is too large? */
-      } else if (scheduler_doforcesplit && ci->split && cj->split &&
-                 (ci->stars.count > space_maxsize / cj->stars.count)) {
-
-        /* Replace the current task. */
-        t->type = task_type_none;
-
-        for (int j = 0; j < 8; j++)
-          if (ci->progeny[j] != NULL && ci->progeny[j]->stars.count)
-            for (int k = 0; k < 8; k++)
-              if (cj->progeny[k] != NULL && cj->progeny[k]->stars.count) {
-                struct task *tl =
-                    scheduler_addtask(s, task_type_pair, t->subtype, 0, 0,
-                                      ci->progeny[j], cj->progeny[k]);
-                scheduler_splittask_stars(tl, s);
-                tl->flags = space_getsid(s->space, &t->ci, &t->cj, shift);
-              }
-      }
-    } /* pair interaction? */
-  }   /* iterate over the current task. */
-}
-
-/**
  * @brief Split a gravity task if too large.
  *
  * @param t The #task
@@ -1740,8 +1308,6 @@ void scheduler_splittasks_mapper(void *map_data, int num_elements,
       scheduler_splittask_gravity(t, s);
     } else if (t->type == task_type_grav_mesh) {
       /* For future use */
-    } else if (t->subtype == task_subtype_stars_density) {
-      scheduler_splittask_stars(t, s);
     } else if (t->type == task_type_fof_self) {
       scheduler_splittask_fof(t, s);
     } else {
@@ -1829,7 +1395,8 @@ void scheduler_set_unlocks(struct scheduler *s) {
 
   /* Store the counts for each task. */
   short int *counts;
-  if ((counts = (short int *)malloc(sizeof(short int) * s->nr_tasks)) == NULL)
+  if ((counts = (short int *)swift_malloc(
+           "counts", sizeof(short int) * s->nr_tasks)) == NULL)
     error("Failed to allocate temporary counts array.");
   bzero(counts, sizeof(short int) * s->nr_tasks);
   for (int k = 0; k < s->nr_unlocks; k++) {
@@ -1847,7 +1414,8 @@ void scheduler_set_unlocks(struct scheduler *s) {
 
   /* Compute the offset for each unlock block. */
   int *offsets;
-  if ((offsets = (int *)malloc(sizeof(int) * (s->nr_tasks + 1))) == NULL)
+  if ((offsets = (int *)swift_malloc("offsets",
+                                     sizeof(int) * (s->nr_tasks + 1))) == NULL)
     error("Failed to allocate temporary offsets array.");
   offsets[0] = 0;
   for (int k = 0; k < s->nr_tasks; k++) {
@@ -1861,8 +1429,8 @@ void scheduler_set_unlocks(struct scheduler *s) {
 
   /* Create and fill a temporary array with the sorted unlocks. */
   struct task **unlocks;
-  if ((unlocks = (struct task **)malloc(sizeof(struct task *) *
-                                        s->size_unlocks)) == NULL)
+  if ((unlocks = (struct task **)swift_malloc(
+           "unlocks", sizeof(struct task *) * s->size_unlocks)) == NULL)
     error("Failed to allocate temporary unlocks array.");
   for (int k = 0; k < s->nr_unlocks; k++) {
     const int ind = s->unlock_ind[k];
@@ -1871,7 +1439,7 @@ void scheduler_set_unlocks(struct scheduler *s) {
   }
 
   /* Swap the unlocks. */
-  free(s->unlocks);
+  swift_free("unlocks", s->unlocks);
   s->unlocks = unlocks;
 
   /* Re-set the offsets. */
@@ -1903,8 +1471,8 @@ void scheduler_set_unlocks(struct scheduler *s) {
 #endif
 
   /* Clean up. */
-  free(counts);
-  free(offsets);
+  swift_free("counts", counts);
+  swift_free("offsets", offsets);
 }
 
 /**
@@ -1986,14 +1554,16 @@ void scheduler_reset(struct scheduler *s, int size) {
     scheduler_free_tasks(s);
 
     /* Allocate the new lists. */
-    if (posix_memalign((void **)&s->tasks, task_align,
+    if (swift_memalign("tasks", (void **)&s->tasks, task_align,
                        size * sizeof(struct task)) != 0)
       error("Failed to allocate task array.");
 
-    if ((s->tasks_ind = (int *)malloc(sizeof(int) * size)) == NULL)
+    if ((s->tasks_ind = (int *)swift_malloc("tasks_ind", sizeof(int) * size)) ==
+        NULL)
       error("Failed to allocate task lists.");
 
-    if ((s->tid_active = (int *)malloc(sizeof(int) * size)) == NULL)
+    if ((s->tid_active =
+             (int *)swift_malloc("tid_active", sizeof(int) * size)) == NULL)
       error("Failed to allocate aactive task lists.");
   }
 
@@ -2143,8 +1713,11 @@ void scheduler_reweight(struct scheduler *s, int verbose) {
       case task_type_grav_mm:
         cost = wscale * (gcount_i + gcount_j);
         break;
-      case task_type_end_force:
-        cost = wscale * count_i + wscale * gcount_i;
+      case task_type_end_hydro_force:
+        cost = wscale * count_i;
+        break;
+      case task_type_end_grav_force:
+        cost = wscale * gcount_i;
         break;
       case task_type_kick1:
         cost = wscale * count_i + wscale * gcount_i;
@@ -2358,9 +1931,6 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
           err = MPI_Irecv(t->ci->hydro.parts, t->ci->hydro.count, part_mpi_type,
                           t->ci->nodeID, t->flags, subtaskMPI_comms[t->subtype],
                           &t->req);
-          // message( "receiving %i parts with tag=%i from %i to %i." ,
-          //     t->ci->hydro.count , t->flags , t->ci->nodeID , s->nodeID );
-          // fflush(stdout);
         } else if (t->subtype == task_subtype_gpart) {
           err = MPI_Irecv(t->ci->grav.parts, t->ci->grav.count, gpart_mpi_type,
                           t->ci->nodeID, t->flags, subtaskMPI_comms[t->subtype],
@@ -2414,9 +1984,6 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
             err = MPI_Issend(t->ci->hydro.parts, t->ci->hydro.count,
                              part_mpi_type, t->cj->nodeID, t->flags,
                              subtaskMPI_comms[t->subtype], &t->req);
-          // message( "sending %i parts with tag=%i from %i to %i." ,
-          //     t->ci->hydro.count , t->flags , s->nodeID , t->cj->nodeID );
-          // fflush(stdout);
         } else if (t->subtype == task_subtype_gpart) {
           if ((t->ci->grav.count * sizeof(struct gpart)) > s->mpi_message_limit)
             err = MPI_Isend(t->ci->grav.parts, t->ci->grav.count,
@@ -2658,7 +2225,7 @@ void scheduler_init(struct scheduler *s, struct space *space, int nr_tasks,
   lock_init(&s->lock);
 
   /* Allocate the queues. */
-  if (posix_memalign((void **)&s->queues, queue_struct_align,
+  if (swift_memalign("queues", (void **)&s->queues, queue_struct_align,
                      sizeof(struct queue) * nr_queues) != 0)
     error("Failed to allocate queues.");
 
@@ -2671,10 +2238,11 @@ void scheduler_init(struct scheduler *s, struct space *space, int nr_tasks,
     error("Failed to initialize sleep barrier.");
 
   /* Init the unlocks. */
-  if ((s->unlocks = (struct task **)malloc(
-           sizeof(struct task *) * scheduler_init_nr_unlocks)) == NULL ||
-      (s->unlock_ind =
-           (int *)malloc(sizeof(int) * scheduler_init_nr_unlocks)) == NULL)
+  if ((s->unlocks = (struct task **)swift_malloc(
+           "unlocks", sizeof(struct task *) * scheduler_init_nr_unlocks)) ==
+          NULL ||
+      (s->unlock_ind = (int *)swift_malloc(
+           "unlock_ind", sizeof(int) * scheduler_init_nr_unlocks)) == NULL)
     error("Failed to allocate unlocks.");
   s->nr_unlocks = 0;
   s->size_unlocks = scheduler_init_nr_unlocks;
@@ -2725,10 +2293,10 @@ void scheduler_print_tasks(const struct scheduler *s, const char *fileName) {
 void scheduler_clean(struct scheduler *s) {
 
   scheduler_free_tasks(s);
-  free(s->unlocks);
-  free(s->unlock_ind);
+  swift_free("unlocks", s->unlocks);
+  swift_free("unlock_ind", s->unlock_ind);
   for (int i = 0; i < s->nr_queues; ++i) queue_clean(&s->queues[i]);
-  free(s->queues);
+  swift_free("queues", s->queues);
 }
 
 /**
@@ -2737,15 +2305,15 @@ void scheduler_clean(struct scheduler *s) {
 void scheduler_free_tasks(struct scheduler *s) {
 
   if (s->tasks != NULL) {
-    free(s->tasks);
+    swift_free("tasks", s->tasks);
     s->tasks = NULL;
   }
   if (s->tasks_ind != NULL) {
-    free(s->tasks_ind);
+    swift_free("tasks_ind", s->tasks_ind);
     s->tasks_ind = NULL;
   }
   if (s->tid_active != NULL) {
-    free(s->tid_active);
+    swift_free("tid_active", s->tid_active);
     s->tid_active = NULL;
   }
   s->size = 0;

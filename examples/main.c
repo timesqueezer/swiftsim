@@ -120,8 +120,9 @@ int main(int argc, char *argv[]) {
   if ((res = MPI_Comm_rank(MPI_COMM_WORLD, &myrank)) != MPI_SUCCESS)
     error("Call to MPI_Comm_rank failed with error %i.", res);
 
-  /* Make sure messages are stamped with the correct rank. */
+  /* Make sure messages are stamped with the correct rank and step. */
   engine_rank = myrank;
+  engine_current_step = 0;
 
   if ((res = MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN)) !=
       MPI_SUCCESS)
@@ -357,7 +358,17 @@ int main(int argc, char *argv[]) {
     if (myrank == 0) {
       argparse_usage(&argparse);
       printf(
-          "\nError: Cannot process feedback without stars, -S must be "
+          "\nError: Cannot process feedback without stars, --stars must be "
+          "chosen.\n");
+    }
+    return 1;
+  }
+
+  if (!with_hydro && with_feedback) {
+    if (myrank == 0) {
+      argparse_usage(&argparse);
+      printf(
+          "\nError: Cannot process feedback without gas, --hydro must be "
           "chosen.\n");
     }
     return 1;
@@ -470,7 +481,6 @@ int main(int argc, char *argv[]) {
 #ifdef WITH_MPI
   if (with_mpole_reconstruction && nr_nodes > 1)
     error("Cannot reconstruct m-poles every step over MPI (yet).");
-  if (with_feedback) error("Can't run with feedback over MPI (yet).");
   if (with_star_formation)
     error("Can't run with star formation over MPI (yet)");
   if (with_limiter) error("Can't run with time-step limiter over MPI (yet)");
@@ -903,10 +913,11 @@ int main(int argc, char *argv[]) {
     if (myrank == 0) cooling_print(&cooling_func);
 
     /* Initialise the star formation law and its properties */
+    bzero(&starform, sizeof(struct star_formation));
     if (with_star_formation)
       starformation_init(params, &prog_const, &us, &hydro_properties,
                          &starform);
-    if (myrank == 0) starformation_print(&starform);
+    if (with_star_formation && myrank == 0) starformation_print(&starform);
 
     /* Initialise the chemistry */
     bzero(&chemistry, sizeof(struct chemistry_global_data));
@@ -1046,6 +1057,19 @@ int main(int argc, char *argv[]) {
   /* unused parameters */
   parser_write_params_to_file(params, "unused_parameters.yml", 0);
 
+  /* Dump memory use report if collected for the 0 step. */
+#ifdef SWIFT_MEMUSE_REPORTS
+  {
+    char dumpfile[40];
+#ifdef WITH_MPI
+    snprintf(dumpfile, 40, "memuse_report-rank%d-step%d.dat", engine_rank, 0);
+#else
+    snprintf(dumpfile, 40, "memuse_report-step%d.dat", 0);
+#endif  // WITH_MPI
+    memuse_log_dump(dumpfile);
+  }
+#endif
+
   /* Main simulation loop */
   /* ==================== */
   int force_stop = 0, resubmit = 0;
@@ -1092,6 +1116,20 @@ int main(int argc, char *argv[]) {
       snprintf(dumpfile, 40, "thread_stats-step%d.dat", j + 1);
       task_dump_stats(dumpfile, &e, /* header = */ 0, /* allranks = */ 1);
     }
+
+      /* Dump memory use report if collected. */
+#ifdef SWIFT_MEMUSE_REPORTS
+    {
+      char dumpfile[40];
+#ifdef WITH_MPI
+      snprintf(dumpfile, 40, "memuse_report-rank%d-step%d.dat", engine_rank,
+               j + 1);
+#else
+      snprintf(dumpfile, 40, "memuse_report-step%d.dat", j + 1);
+#endif  // WITH_MPI
+      memuse_log_dump(dumpfile);
+    }
+#endif
 
 #ifdef SWIFT_DEBUG_THREADPOOL
     /* Dump the task data using the given frequency. */
