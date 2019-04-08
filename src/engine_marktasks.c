@@ -595,7 +595,9 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
 
     /* Hydro ghost tasks ? */
     else if (t_type == task_type_ghost || t_type == task_type_extra_ghost ||
-             t_type == task_type_ghost_in || t_type == task_type_ghost_out) {
+             t_type == task_type_ghost_in || t_type == task_type_ghost_out ||
+             t_type == task_type_extra_ghost_in ||
+             t_type == task_type_extra_ghost_out) {
       if (cell_is_active_hydro(t->ci, e)) scheduler_activate(s, t);
     }
 

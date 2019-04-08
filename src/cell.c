@@ -3362,6 +3362,10 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
     for (struct link *l = c->hydro.limiter; l != NULL; l = l->next)
       scheduler_activate(s, l->t);
 
+    if (c->hydro.extra_ghost_in != NULL)
+      scheduler_activate(s, c->hydro.extra_ghost_in);
+    if (c->hydro.extra_ghost_out != NULL)
+      scheduler_activate(s, c->hydro.extra_ghost_out);
     if (c->hydro.extra_ghost != NULL)
       scheduler_activate(s, c->hydro.extra_ghost);
     if (c->hydro.ghost_in != NULL) scheduler_activate(s, c->hydro.ghost_in);

@@ -49,8 +49,10 @@ enum task_types {
   task_type_init_grav_out, /* Implicit */
   task_type_ghost_in,      /* Implicit */
   task_type_ghost,
-  task_type_ghost_out, /* Implicit */
+  task_type_ghost_out,      /* Implicit */
+  task_type_extra_ghost_in, /* Implicit */
   task_type_extra_ghost,
+  task_type_extra_ghost_out, /* Implicit */
   task_type_drift_part,
   task_type_drift_spart,
   task_type_drift_gpart,

@@ -675,7 +675,9 @@ void engine_make_hierarchical_tasks_gravity(struct engine *e, struct cell *c) {
  * @brief Recursively add non-implicit ghost tasks to a cell hierarchy.
  */
 void engine_add_hydro_ghosts(struct engine *e, struct cell *c,
-                             struct task *ghost_in, struct task *ghost_out) {
+                             struct task *ghost_in, struct task *ghost_out,
+                             struct task *extra_ghost_in,
+                             struct task *extra_ghost_out) {
 
   /* Abort as there are no hydro particles here? */
   if (c->hydro.count_total == 0) return;
@@ -690,11 +692,19 @@ void engine_add_hydro_ghosts(struct engine *e, struct cell *c,
     scheduler_addunlock(s, ghost_in, c->hydro.ghost);
     scheduler_addunlock(s, c->hydro.ghost, ghost_out);
 
+#ifdef EXTRA_HYDRO_LOOP
+    c->hydro.extra_ghost = scheduler_addtask(s, task_type_extra_ghost,
+                                             task_subtype_none, 0, 0, c, NULL);
+    scheduler_addunlock(s, extra_ghost_in, c->hydro.extra_ghost);
+    scheduler_addunlock(s, c->hydro.extra_ghost, extra_ghost_out);
+#endif
+
   } else {
     /* Keep recursing */
     for (int k = 0; k < 8; k++)
       if (c->progeny[k] != NULL)
-        engine_add_hydro_ghosts(e, c->progeny[k], ghost_in, ghost_out);
+        engine_add_hydro_ghosts(e, c->progeny[k], ghost_in, ghost_out,
+                                extra_ghost_in, extra_ghost_out);
   }
 }
 
@@ -712,8 +722,8 @@ void engine_add_stars_ghosts(struct engine *e, struct cell *c,
 
     /* Add the ghost task and its dependencies */
     struct scheduler *s = &e->sched;
-    c->stars.ghost =
-        scheduler_addtask(s, task_type_stars_ghost, task_subtype_none, 0, 0, c, NULL);
+    c->stars.ghost = scheduler_addtask(s, task_type_stars_ghost,
+                                       task_subtype_none, 0, 0, c, NULL);
     scheduler_addunlock(s, ghost_in, c->stars.ghost);
     scheduler_addunlock(s, c->stars.ghost, ghost_out);
 
@@ -775,13 +785,20 @@ void engine_make_hierarchical_tasks_hydro(struct engine *e, struct cell *c) {
       c->hydro.ghost_out =
           scheduler_addtask(s, task_type_ghost_out, task_subtype_none, 0,
                             /* implicit = */ 1, c, NULL);
-      engine_add_hydro_ghosts(e, c, c->hydro.ghost_in, c->hydro.ghost_out);
 
-      /* Generate the extra ghost task. */
 #ifdef EXTRA_HYDRO_LOOP
-      c->hydro.extra_ghost = scheduler_addtask(
-          s, task_type_extra_ghost, task_subtype_none, 0, 0, c, NULL);
+      /* Generate the extra ghost task. */
+      c->hydro.extra_ghost_in =
+          scheduler_addtask(s, task_type_extra_ghost_in, task_subtype_none, 0,
+                            /* implicit = */ 1, c, NULL);
+      c->hydro.extra_ghost_out =
+          scheduler_addtask(s, task_type_extra_ghost_out, task_subtype_none, 0,
+                            /* implicit = */ 1, c, NULL);
 #endif
+
+      engine_add_hydro_ghosts(e, c, c->hydro.ghost_in, c->hydro.ghost_out,
+                              c->hydro.extra_ghost_in,
+                              c->hydro.extra_ghost_out);
 
       /* Stars */
       if (with_stars) {
@@ -1370,8 +1387,8 @@ static inline void engine_make_hydro_loops_dependencies(
   /* extra_ghost --> force loop  */
   scheduler_addunlock(sched, density, c->hydro.super->hydro.ghost_in);
   scheduler_addunlock(sched, c->hydro.super->hydro.ghost_out, gradient);
-  scheduler_addunlock(sched, gradient, c->hydro.super->hydro.extra_ghost);
-  scheduler_addunlock(sched, c->hydro.super->hydro.extra_ghost, force);
+  scheduler_addunlock(sched, gradient, c->hydro.super->hydro.extra_ghost_in);
+  scheduler_addunlock(sched, c->hydro.super->hydro.extra_ghost_out, force);
 }
 
 #else

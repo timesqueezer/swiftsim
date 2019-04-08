@@ -280,6 +280,12 @@ struct cell {
     /*! The ghost task itself */
     struct task *ghost;
 
+    /*! Dependency implicit task for the extra ghost  (in->ghost->out)*/
+    struct task *extra_ghost_in;
+
+    /*! Dependency implicit task for the extra ghost  (in->ghost->out)*/
+    struct task *extra_ghost_out;
+
     /*! The extra ghost task for complex hydro schemes */
     struct task *extra_ghost;
 
