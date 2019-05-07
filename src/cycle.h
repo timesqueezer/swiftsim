@@ -554,3 +554,13 @@ static inline ticks getticks(void) {
 INLINE_ELAPSED(inline)
 #define HAVE_TICK_COUNTER
 #endif
+
+#if defined(__NEC__) && !defined(HAVE_TICK_COUNTER)
+typedef long ticks;
+static inline ticks getticks(void) {
+    long cc;
+    asm volatile("smir %0, %usrcc" : "=r"(cc));
+    return cc;
+}
+#define HAVE_TICK_COUNTER
+#endif

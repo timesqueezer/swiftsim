@@ -22,7 +22,7 @@
 /**
  * @brief The default struct alignment in SWIFT.
  */
-#define SWIFT_STRUCT_ALIGNMENT 32
+#define SWIFT_STRUCT_ALIGNMENT 16
 
 /**
  * @brief Defines alignment of structures
@@ -32,7 +32,7 @@
 /**
  * @brief The default cache alignment in SWIFT.
  */
-#define SWIFT_CACHE_ALIGNMENT 64
+#define SWIFT_CACHE_ALIGNMENT 16
 
 /**
  * @brief Defines alignment of caches

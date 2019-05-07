@@ -79,7 +79,7 @@ extern int engine_rank;
             clocks_get_timesincestart(), __FILE__, __FUNCTION__, __LINE__, \
             ##__VA_ARGS__);                                                \
     int len = 1024;                                                        \
-    char buf[len];                                                         \
+    char buf[1024];                                                         \
     MPI_Error_string(res, buf, &len);                                      \
     fprintf(stderr, "%s\n\n", buf);                                        \
     MPI_Abort(MPI_COMM_WORLD, -1);                                         \
