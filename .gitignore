@@ -186,6 +186,8 @@ src/equation_of_state/planetary/*.txt
 *.obj
 *.elf
 
+*.d
+
 # Test results
 *.trs
 
