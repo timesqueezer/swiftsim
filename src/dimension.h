@@ -67,7 +67,7 @@
  *
  * Computes \f$x^d\f$.
  */
-__attribute__((always_inline)) INLINE static float pow_dimension(float x) {
+INLINE static float pow_dimension(float x) {
 
 #if defined(HYDRO_DIMENSION_3D)
 

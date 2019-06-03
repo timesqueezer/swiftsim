@@ -208,7 +208,7 @@ hydro_get_physical_soundspeed(const struct part *restrict p,
  *
  * @param p The particle of interest
  */
-__attribute__((always_inline)) INLINE static float hydro_get_comoving_density(
+static float hydro_get_comoving_density(
     const struct part *restrict p) {
 
   return p->rho;
@@ -231,7 +231,7 @@ __attribute__((always_inline)) INLINE static float hydro_get_physical_density(
  *
  * @param p The particle of interest
  */
-__attribute__((always_inline)) INLINE static float hydro_get_mass(
+INLINE static float hydro_get_mass(
     const struct part *restrict p) {
 
   return p->mass;

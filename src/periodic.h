@@ -49,7 +49,7 @@
  * Similarly for dx < -b.
  *
  */
-__attribute__((always_inline, const)) INLINE static double nearest(
+INLINE static double nearest(
     const double dx, const double box_size) {
 
   return ((dx > 0.5 * box_size)

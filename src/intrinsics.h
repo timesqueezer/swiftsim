@@ -90,20 +90,20 @@ __attribute__((always_inline, const)) INLINE static int intrinsics_clzll(
  * This is a wrapper for the GNU intrinsic with an implementation (from
  * Hacker's Delight) if the compiler intrinsics are not available.
  */
-__attribute__((always_inline, const)) INLINE static int intrinsics_popcount(
+INLINE static int intrinsics_popcount(
     unsigned int x) {
 
-#ifdef __GNUC__
+//#ifdef __GNUC__
   /* Use GCC intrinsics if possible */
-  return __builtin_popcount(x);
-#else
+  //return __builtin_popcount(x);
+//#else
   x = (x & 0x55555555) + ((x >> 1) & 0x55555555);
   x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
   x = (x & 0x0F0F0F0F) + ((x >> 4) & 0x0F0F0F0F);
   x = (x & 0x00FF00FF) + ((x >> 8) & 0x00FF00FF);
   x = (x & 0x0000FFFF) + ((x >> 16) & 0x0000FFFF);
   return x;
-#endif
+//#endif
 }
 
 /**
