@@ -769,6 +769,71 @@ if test "x$with_arm_fftw" != "xno"; then
       fi
    fi
 fi
+
+AC_ARG_WITH([asl-fftw],
+    [AS_HELP_STRING([--with-asl-fftw=PATH],
+      [root directory where arm fft library is installed @<:@yes/no@:>@]
+    )],
+    [with_asl_fftw="$withval"],
+    [with_asl_fftw=no]
+)
+if test "x$with_asl_fftw" != "xno"; then
+
+   # Was FFTW's location specifically given?
+   if test "x$with_asl_fftw" != "xyes" -a "x$with_asl_fftw" != "xtest" -a "x$with_asl_fftw" != "x"; then
+      FFTW_LIBS="-L$with_asl_fftw/lib -laslfftw3 -lasl_sequential"
+      FFTW_INCS="-I$with_asm_fftw/include -DASLFFTW_COMPLEX_LEGACY"
+   else
+      FFTW_LIBS="-laslfftw3 -lasl_sequential"
+      FFTW_INCS="-DASLFFTW_COMPLEX_LEGACY"
+   fi
+
+   #  FFTW is not specified, so just check if we have it.
+   if test "x$with_asl_fftw" = "xtest"; then
+      AC_CHECK_LIB([aslfftw3],[fftw_malloc],[have_fftw="yes"],[have_fftw="no"],$FFTW_LIBS)
+      if test "x$have_asl_fftw" != "xno"; then
+      	 AC_DEFINE([HAVE_FFTW],1,[The FFTW library appears to be present.])
+	 have_fftw="yes - ASL"
+      fi
+   # FFTW was specified, check that it was a valid location.
+   else
+      AC_CHECK_LIB([aslfftw3],[fftw_malloc],
+         AC_DEFINE([HAVE_FFTW],1,[The FFTW library appears to be present.]),
+         AC_MSG_ERROR(something is wrong with the FFTW library!), $FFTW_LIBS)
+      have_fftw="yes - ASL"
+   fi
+
+   # FFTW was requested not to be used.
+   if test "$have_asl_fftw" = "no"; then
+      FFTW_LIBS=""
+      FFTW_INCS=""
+   fi
+
+   # Now, check whether we have the threaded version of FFTW
+   if test "x$have_arm_fftw" = "xyes"; then
+
+      # Was FFTW's location specifically given?
+      if test "x$with_asl_fftw" != "xyes" -a "x$with_asl_fftw" != "xtest" -a "x$with_asl_fftw" != "x"; then
+        FFTW_THREADED_LIBS="-L$with_asl_fftw/lib -laslfftw3 -lasl_openmp -fopenmp"
+        FFTW_THREADED_INCS="-I$with_asl_fftw/include -DASLFFTW_COMPLEX_LEGACY"
+      else
+        FFTW_THREADED_LIBS="-laslfftw3 -lasl_openmp -fopenmp"
+        FFTW_THREADED_INCS="-DASLFFTW_COMPLEX_LEGACY"
+      fi
+
+      # Verify that the library is threaded
+      AC_CHECK_LIB([aslfftw3],[fftw_init_threads],[have_threaded_fftw="yes"],
+                  [have_threaded_fftw="no"], $FFTW_THREADED_LIBS)
+
+      # If found, update things
+      if test "x$have_threaded_fftw" = "xyes"; then
+         AC_DEFINE([HAVE_THREADED_FFTW],1,[The threaded FFTW library appears to be present.])
+         FFTW_LIBS=$FFTW_THREADED_LIBS
+         FFTW_INCS=$FFTW_THREADED_INCS
+         have_fftw="yes - ASL - threaded"
+      fi
+   fi
+fi
 AC_SUBST([FFTW_LIBS])
 AC_SUBST([FFTW_INCS])
 AM_CONDITIONAL([HAVEFFTW],[test -n "$FFTW_LIBS"])
